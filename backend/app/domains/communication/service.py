@@ -35,6 +35,7 @@ from app.domains.communication.aac_service import AACService
 from app.domains.communication.emotion_service import EmotionService
 from app.domains.communication.speech_service import SpeechService
 from app.ai.communication_ai import CommunicationAI
+from app.ai.gateway import SmartAIGateway
 from app.models.user import User
 
 class CommunicationService:
@@ -106,6 +107,14 @@ class CommunicationService:
             context=req.context,
             style=req.style or "natural"
         )
+        gateway_result = SmartAIGateway(self.db).build_aac_sentence(
+            tokens=req.tokens,
+            sentence=req.sentence,
+            user_id=current_user.id if current_user else None,
+            fallback=lambda: res["generated_sentence"],
+            context={"emotion": req.emotion, "style": req.style, "context": req.context},
+        )
+        res["generated_sentence"] = gateway_result.text
         
         # Log communication attempt
         saved_log_id = None
@@ -147,6 +156,14 @@ class CommunicationService:
             target_level=req.target_level or "easy",
             context=req.context
         )
+        gateway_result = SmartAIGateway(self.db).simplify_message(
+            text=target_text,
+            user_id=current_user.id if current_user else None,
+            fallback=lambda: res.get("simplified_text", target_text),
+            context={"target_level": req.target_level, "context": req.context},
+        )
+        res["simplified_text"] = gateway_result.text
+        res["simplified_sentence"] = gateway_result.text
         return SimplifyTextResponse(
             original_text=res.get("original_text", target_text),
             simplified_text=res.get("simplified_text", ""),
