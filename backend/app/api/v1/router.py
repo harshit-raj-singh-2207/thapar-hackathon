@@ -22,12 +22,14 @@ from app.api.v1.communication.router import router as communication_router
 from app.api.v1.learning.router import router as learning_router
 from app.domains.safety.caregiver_dashboard_router import router as caregiver_dashboard_router
 from app.domains.api_budget.router import router as api_budget_router
+from app.domains.live_state.router import router as live_state_router
 
 router = APIRouter()
 
 router.include_router(dashboard_router)
 router.include_router(caregiver_dashboard_router)
 router.include_router(api_budget_router)
+router.include_router(live_state_router)
 router.include_router(auth_router)
 router.include_router(caregivers_router)
 router.include_router(communication_router)
