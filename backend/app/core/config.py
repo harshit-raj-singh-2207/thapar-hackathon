@@ -42,4 +42,18 @@ class Settings:
     PORT: int = int(os.getenv("PORT", "8000"))
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
 
+    # External API budget (Indian rupees per calendar month)
+    MONTHLY_API_BUDGET_INR: float = float(os.getenv("MONTHLY_API_BUDGET_INR", "1500"))
+
+    # Optional external AI. Local template/rule fallbacks remain available without a key.
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "groq")
+    AI_MODEL: str = os.getenv("AI_MODEL", "llama-3.1-8b-instant")
+    AI_API_KEY: str = os.getenv("AI_API_KEY", "")
+    AI_REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "8"))
+    AI_MAX_OUTPUT_TOKENS: int = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "180"))
+    AI_RATE_LIMIT_PER_MINUTE: int = int(os.getenv("AI_RATE_LIMIT_PER_MINUTE", "10"))
+    AI_DUPLICATE_WINDOW_SECONDS: int = int(os.getenv("AI_DUPLICATE_WINDOW_SECONDS", "10"))
+    AI_CACHE_TTL_SECONDS: int = int(os.getenv("AI_CACHE_TTL_SECONDS", "300"))
+    AI_ESTIMATED_COST_INR_PER_REQUEST: float = float(os.getenv("AI_ESTIMATED_COST_INR_PER_REQUEST", "0.05"))
+
 settings = Settings()
