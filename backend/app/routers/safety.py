@@ -17,6 +17,8 @@ from app.domains.safety.router import router as gps_location_core_router
 from app.domains.safety.band_router import router as band_router
 from app.domains.safety.separation_router import router as separation_router
 from app.domains.safety.safe_zone_router import router as safe_zone_domain_router
+from app.domains.safety.checkpoint_router import router as checkpoint_domain_router
+from app.domains.safety.pickup_router import router as pickup_domain_router
 from app.domains.safety.emergency_router import router as emergency_domain_router
 from app.domains.safety.emergency_contact_router import router as emergency_contact_domain_router
 from app.domains.safety.alert_router import router as alert_domain_router
@@ -32,6 +34,8 @@ router.include_router(gps_location_core_router)
 router.include_router(band_router)
 router.include_router(separation_router)
 router.include_router(safe_zone_domain_router)
+router.include_router(checkpoint_domain_router)
+router.include_router(pickup_domain_router)
 router.include_router(emergency_domain_router)
 router.include_router(emergency_contact_domain_router)
 router.include_router(alert_domain_router)

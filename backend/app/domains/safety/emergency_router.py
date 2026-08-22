@@ -10,10 +10,36 @@ from app.schemas.emergency import (
     EmergencyResolveRequest,
     EmergencyResponse,
     EmergencyDetailResponse,
+    NFCSOSTriggerRequest,
+    NFCSOSTriggerResponse,
 )
 from app.domains.safety.emergency_service import EmergencyService
 
 router = APIRouter(prefix="/emergency", tags=["Safety - SOS & Emergency System"])
+
+@router.post(
+    "/nfc-trigger",
+    response_model=NFCSOSTriggerResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Trigger SOS via NFC",
+    description="Trigger an immediate SOS emergency using an authorized physical NFC badge or panic trigger."
+)
+@router.post(
+    "/nfc-trigger/",
+    response_model=NFCSOSTriggerResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False
+)
+def trigger_nfc_sos(
+    data: NFCSOSTriggerRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Trigger emergency SOS via physical NFC scan. Validates child access, NFC ID, and GPS coordinates, then invokes the existing SOS engine.
+    """
+    service = EmergencyService(db)
+    return service.trigger_nfc_sos(data=data, current_user=current_user)
 
 @router.post(
     "/sos",
