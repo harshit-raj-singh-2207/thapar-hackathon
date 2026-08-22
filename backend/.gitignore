@@ -1,0 +1,36 @@
+# Node
+node_modules/
+dist/
+build/
+
+# React / Vite
+.vite/
+
+# Expo
+.expo/
+.expo-shared/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.venv/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

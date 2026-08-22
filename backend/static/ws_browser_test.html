@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIVARA — Two-User Real-Time WebSocket Browser Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .panel {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #334155;
+        }
+        .panel h2 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        .panel.user-a h2 { color: #60a5fa; }
+        .panel.user-b h2 { color: #34d399; }
+        .status {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .status.connected { background: #065f46; color: #6ee7b7; }
+        .status.disconnected { background: #7f1d1d; color: #fca5a5; }
+        .status.pending { background: #78350f; color: #fcd34d; }
+        .log-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px;
+            height: 220px;
+            overflow-y: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 0.72rem;
+            line-height: 1.5;
+        }
+        .log-entry { margin-bottom: 2px; }
+        .log-entry.send { color: #60a5fa; }
+        .log-entry.recv { color: #34d399; }
+        .log-entry.error { color: #f87171; }
+        .log-entry.info { color: #fbbf24; }
+        .log-entry.system { color: #a78bfa; }
+
+        .results-panel {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #334155;
+        }
+        .results-panel h2 {
+            font-size: 1.1rem;
+            color: #a78bfa;
+            margin-bottom: 12px;
+        }
+        .test-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            font-size: 0.85rem;
+        }
+        .test-row:nth-child(odd) { background: #0f172a; }
+        .test-row .badge {
+            padding: 2px 12px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.75rem;
+        }
+        .badge.pass { background: #065f46; color: #6ee7b7; }
+        .badge.fail { background: #7f1d1d; color: #fca5a5; }
+        .badge.pending { background: #78350f; color: #fcd34d; }
+        .badge.running { background: #1e3a5f; color: #93c5fd; }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 28px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            color: #fff;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+        .controls { text-align: center; margin-bottom: 16px; }
+        #overall-status {
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        #overall-status.all-pass { background: #065f46; color: #6ee7b7; }
+        #overall-status.some-fail { background: #7f1d1d; color: #fca5a5; }
+    </style>
+</head>
+<body>
+    <h1>NIVARA — Two-User Real-Time WebSocket Browser Test</h1>
+    <p class="subtitle">Dual-authenticated browser sessions testing direct chat, notifications, group activity, persistence, auth, authorization, reconnection</p>
+
+    <div class="controls">
+        <button class="btn btn-primary" id="runBtn" onclick="runAllTests()">Run All 8 Tests</button>
+    </div>
+
+    <div class="grid">
+        <div class="panel user-a">
+            <h2>Browser A — Sarah Mitchell (User A)</h2>
+            <span class="status disconnected" id="statusA">Disconnected</span>
+            <div class="log-box" id="logA"></div>
+        </div>
+        <div class="panel user-b">
+            <h2>Browser B — David Chen (User B)</h2>
+            <span class="status disconnected" id="statusB">Disconnected</span>
+            <div class="log-box" id="logB"></div>
+        </div>
+    </div>
+
+    <div class="results-panel">
+        <h2>Test Results</h2>
+        <div class="test-row"><span>TEST 1 — Two-user direct chat</span><span class="badge pending" id="res1">PENDING</span></div>
+        <div class="test-row"><span>TEST 2 — Real-time notification</span><span class="badge pending" id="res2">PENDING</span></div>
+        <div class="test-row"><span>TEST 3 — Community/Group activity</span><span class="badge pending" id="res3">PENDING</span></div>
+        <div class="test-row"><span>TEST 4 — Message persistence</span><span class="badge pending" id="res4">PENDING</span></div>
+        <div class="test-row"><span>TEST 5 — JWT authentication</span><span class="badge pending" id="res5">PENDING</span></div>
+        <div class="test-row"><span>TEST 6 — Conversation authorization</span><span class="badge pending" id="res6">PENDING</span></div>
+        <div class="test-row"><span>TEST 7 — Reconnection</span><span class="badge pending" id="res7">PENDING</span></div>
+        <div class="test-row"><span>TEST 8 — Browser console errors</span><span class="badge pending" id="res8">PENDING</span></div>
+        <div id="overall-status"></div>
+    </div>
+
+    <script>
+        const BASE = 'http://localhost:8000/api/v1';
+        const WS_URL = 'ws://localhost:8000/api/v1/community/ws';
+
+        let tokenA, tokenB, tokenC, userIdA, userIdB, userIdC;
+        let wsA, wsB;
+        let wsA_queue = [];
+        let wsB_queue = [];
+        let consoleErrors = [];
+
+        // Capture console errors
+        const origError = console.error;
+        console.error = function() {
+            consoleErrors.push(Array.from(arguments).join(' '));
+            origError.apply(console, arguments);
+        };
+        window.addEventListener('error', e => consoleErrors.push(e.message));
+        window.addEventListener('unhandledrejection', e => consoleErrors.push(e.reason?.message || String(e.reason)));
+
+        function logA(msg, cls='info') {
+            const el = document.getElementById('logA');
+            const ts = new Date().toLocaleTimeString();
+            el.innerHTML += `<div class="log-entry ${cls}">[${ts}] ${msg}</div>`;
+            el.scrollTop = el.scrollHeight;
+        }
+        function logB(msg, cls='info') {
+            const el = document.getElementById('logB');
+            const ts = new Date().toLocaleTimeString();
+            el.innerHTML += `<div class="log-entry ${cls}">[${ts}] ${msg}</div>`;
+            el.scrollTop = el.scrollHeight;
+        }
+        function setStatusA(text, cls) {
+            const el = document.getElementById('statusA');
+            el.textContent = text;
+            el.className = 'status ' + cls;
+        }
+        function setStatusB(text, cls) {
+            const el = document.getElementById('statusB');
+            el.textContent = text;
+            el.className = 'status ' + cls;
+        }
+        function setResult(num, pass) {
+            const el = document.getElementById('res' + num);
+            el.textContent = pass ? 'PASS' : 'FAIL';
+            el.className = 'badge ' + (pass ? 'pass' : 'fail');
+        }
+        function setRunning(num) {
+            const el = document.getElementById('res' + num);
+            el.textContent = 'RUNNING...';
+            el.className = 'badge running';
+        }
+
+        async function apiPost(url, data, token) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            const res = await fetch(BASE + url, { method: 'POST', headers, body: JSON.stringify(data) });
+            return { status: res.status, data: await res.json().catch(() => ({})) };
+        }
+        async function apiGet(url, token) {
+            const headers = {};
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            const res = await fetch(BASE + url, { headers });
+            return { status: res.status, data: await res.json().catch(() => ({})) };
+        }
+
+        function connectWS(token) {
+            return new Promise((resolve, reject) => {
+                const ws = new WebSocket(WS_URL + '?token=' + token);
+                ws._msgQueue = [];
+                ws.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    ws._msgQueue.push(msg);
+                };
+                ws.onopen = () => {
+                    // Wait for connection_ack
+                    const check = setInterval(() => {
+                        const ack = ws._msgQueue.find(m => m.type === 'connection_ack');
+                        if (ack) {
+                            clearInterval(check);
+                            resolve({ ws, ack });
+                        }
+                    }, 50);
+                    setTimeout(() => { clearInterval(check); reject(new Error('No ack')); }, 5000);
+                };
+                ws.onerror = (e) => reject(e);
+            });
+        }
+
+        function waitForMessage(ws, filter, timeoutMs = 5000) {
+            return new Promise((resolve, reject) => {
+                // Check already-received messages
+                const existing = ws._msgQueue.find(filter);
+                if (existing) {
+                    ws._msgQueue.splice(ws._msgQueue.indexOf(existing), 1);
+                    resolve(existing);
+                    return;
+                }
+                const origHandler = ws.onmessage;
+                const timer = setTimeout(() => {
+                    ws.onmessage = origHandler;
+                    reject(new Error('Timeout waiting for message'));
+                }, timeoutMs);
+
+                ws.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    ws._msgQueue.push(msg);
+                    const found = ws._msgQueue.find(filter);
+                    if (found) {
+                        clearTimeout(timer);
+                        ws._msgQueue.splice(ws._msgQueue.indexOf(found), 1);
+                        ws.onmessage = origHandler;
+                        resolve(found);
+                    }
+                };
+            });
+        }
+
+        function tryConnectWS_shouldFail(urlOverride) {
+            return new Promise((resolve) => {
+                try {
+                    const ws = new WebSocket(urlOverride || WS_URL);
+                    ws.onopen = () => { ws.close(); resolve(false); }; // connected = bad
+                    ws.onerror = () => resolve(true); // error = expected
+                    ws.onclose = (e) => {
+                        if (e.code === 1006 || e.code === 403 || !e.wasClean) resolve(true);
+                    };
+                    setTimeout(() => { try { ws.close(); } catch(e){} resolve(true); }, 3000);
+                } catch(e) { resolve(true); }
+            });
+        }
+
+        async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        async function runAllTests() {
+            const btn = document.getElementById('runBtn');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            consoleErrors = [];
+
+            try {
+                // ==== AUTHENTICATE ====
+                logA('Logging in as sarah@nivara.app...', 'info');
+                const resA = await apiPost('/auth/login', { email: 'sarah@nivara.app', password: 'password123' });
+                tokenA = resA.data.access_token;
+                userIdA = resA.data.user_id;
+                logA('Authenticated! User ID: ' + userIdA, 'system');
+
+                logB('Logging in as david@nivara.app...', 'info');
+                const resB = await apiPost('/auth/login', { email: 'david@nivara.app', password: 'password123' });
+                tokenB = resB.data.access_token;
+                userIdB = resB.data.user_id;
+                logB('Authenticated! User ID: ' + userIdB, 'system');
+
+                // ==== TEST 5 — JWT AUTHENTICATION ====
+                setRunning(5);
+                logA('TEST 5: Checking WebSocket without JWT...', 'info');
+                const noJwtRejected = await tryConnectWS_shouldFail(WS_URL);
+                logA('No JWT -> ' + (noJwtRejected ? 'Rejected (correct)' : 'ACCEPTED (wrong!)'), noJwtRejected ? 'recv' : 'error');
+
+                logA('TEST 5: Checking WebSocket with invalid JWT...', 'info');
+                const invalidJwtRejected = await tryConnectWS_shouldFail(WS_URL + '?token=invalid.jwt.token');
+                logA('Invalid JWT -> ' + (invalidJwtRejected ? 'Rejected (correct)' : 'ACCEPTED (wrong!)'), invalidJwtRejected ? 'recv' : 'error');
+
+                const test5pass = noJwtRejected && invalidJwtRejected;
+
+                // Connect both users with valid JWT
+                logA('Connecting WebSocket with valid JWT...', 'info');
+                setStatusA('Connecting...', 'pending');
+                const connA = await connectWS(tokenA);
+                wsA = connA.ws;
+                logA('WebSocket connected! Ack: user_id=' + connA.ack.user_id, 'recv');
+                setStatusA('Connected', 'connected');
+
+                logB('Connecting WebSocket with valid JWT...', 'info');
+                setStatusB('Connecting...', 'pending');
+                const connB = await connectWS(tokenB);
+                wsB = connB.ws;
+                logB('WebSocket connected! Ack: user_id=' + connB.ack.user_id, 'recv');
+                setStatusB('Connected', 'connected');
+
+                logA('Valid JWT -> Accepted (correct)', 'recv');
+                logB('Valid JWT -> Accepted (correct)', 'recv');
+                setResult(5, test5pass);
+
+                // Get/create conversation
+                const chatRes = await apiPost('/community/chats', { recipient_id: userIdB }, tokenA);
+                const chatId = chatRes.data.id;
+                logA('Conversation created/found: ' + chatId, 'system');
+
+                // ==== TEST 1 — DIRECT CHAT ====
+                setRunning(1);
+                const msgTextAtoB = 'Hello David! Real-time browser test at ' + new Date().toISOString();
+                logA('TEST 1: Sending direct message -> "' + msgTextAtoB + '"', 'send');
+
+                // Clear message queues
+                wsA._msgQueue = [];
+                wsB._msgQueue = [];
+
+                const sendRes1 = await apiPost('/community/chats/' + chatId + '/messages', { text: msgTextAtoB }, tokenA);
+                logA('Message sent via REST API (status ' + sendRes1.status + ')', 'info');
+
+                let test1pass = true;
+                try {
+                    const received1 = await waitForMessage(wsB, m => m.type === 'direct_message' && m.text === msgTextAtoB);
+                    logB('RECEIVED via WebSocket: type=' + received1.type + ', text="' + received1.text + '"', 'recv');
+                    logB('NO PAGE REFRESH — message appeared instantly!', 'recv');
+                } catch (e) {
+                    logB('TIMEOUT: Did not receive message within 5 seconds!', 'error');
+                    test1pass = false;
+                }
+
+                // Reverse: User B -> User A
+                const msgTextBtoA = 'Hello Sarah! Got your message live!';
+                logB('TEST 1b: Replying -> "' + msgTextBtoA + '"', 'send');
+                wsA._msgQueue = [];
+                const sendRes2 = await apiPost('/community/chats/' + chatId + '/messages', { text: msgTextBtoA }, tokenB);
+                logB('Reply sent via REST API (status ' + sendRes2.status + ')', 'info');
+
+                try {
+                    const received2 = await waitForMessage(wsA, m => m.type === 'direct_message' && m.text === msgTextBtoA);
+                    logA('RECEIVED via WebSocket: type=' + received2.type + ', text="' + received2.text + '"', 'recv');
+                    logA('NO PAGE REFRESH — reply appeared instantly!', 'recv');
+                } catch (e) {
+                    logA('TIMEOUT: Did not receive reply within 5 seconds!', 'error');
+                    test1pass = false;
+                }
+                setResult(1, test1pass);
+
+                // ==== TEST 2 — REAL-TIME NOTIFICATION ====
+                setRunning(2);
+                logB('TEST 2: Creating a post for notification testing...', 'info');
+                const postRes = await apiPost('/posts', { content: 'Browser test post by David', category: 'Sensory Support' }, tokenB);
+                const postId = postRes.data.id;
+                logB('Post created: ' + postId, 'info');
+
+                wsB._msgQueue = [];
+                logA('TEST 2: Commenting on David\'s post...', 'send');
+                await apiPost('/community/posts/' + postId + '/comments', { content: 'Great post David! Browser notification test.' }, tokenA);
+
+                let test2pass = true;
+                try {
+                    const notif = await waitForMessage(wsB, m => m.type === 'notification' && m.notification_type === 'comment');
+                    logB('NOTIFICATION received: type=' + notif.type + ', notification_type=' + notif.notification_type, 'recv');
+                    logB('Body: "' + notif.body + '"', 'recv');
+                    logB('Real-time notification delivered instantly!', 'recv');
+                } catch (e) {
+                    logB('TIMEOUT: Notification not received within 5 seconds!', 'error');
+                    test2pass = false;
+                }
+                setResult(2, test2pass);
+
+                // ==== TEST 3 — GROUP ACTIVITY ====
+                setRunning(3);
+                const groupId = 'group-sensory-1';
+                logA('TEST 3: Ensuring both users are in group ' + groupId + '...', 'info');
+                await apiPost('/community/groups/' + groupId + '/join', {}, tokenA).catch(()=>{});
+                await apiPost('/community/groups/' + groupId + '/join', {}, tokenB).catch(()=>{});
+
+                wsB._msgQueue = [];
+                const grpMsg = 'Hello Sensory group! Browser real-time test.';
+                logA('Sending group message: "' + grpMsg + '"', 'send');
+                await apiPost('/community/groups/' + groupId + '/messages', { text: grpMsg }, tokenA);
+
+                let test3pass = true;
+                try {
+                    const grpEvent = await waitForMessage(wsB, m => m.type === 'group_message' && m.text === grpMsg);
+                    logB('GROUP MESSAGE received: type=' + grpEvent.type + ', text="' + grpEvent.text + '"', 'recv');
+                    logB('Group broadcast delivered live!', 'recv');
+                } catch (e) {
+                    logB('TIMEOUT: Group message not received within 5 seconds!', 'error');
+                    test3pass = false;
+                }
+                setResult(3, test3pass);
+
+                // ==== TEST 4 — MESSAGE PERSISTENCE ====
+                setRunning(4);
+                logA('TEST 4: Closing WebSockets to test persistence...', 'info');
+                wsA.close();
+                wsB.close();
+                setStatusA('Disconnected (test)', 'disconnected');
+                setStatusB('Disconnected (test)', 'disconnected');
+                await sleep(500);
+
+                logA('Fetching chat history via REST API...', 'info');
+                const historyRes = await apiGet('/community/chats/' + chatId + '/messages', tokenA);
+                const messages = historyRes.data;
+                logA('Retrieved ' + messages.length + ' messages from SQLite', 'info');
+
+                const texts = messages.map(m => m.text);
+                const foundAtoB = texts.includes(msgTextAtoB);
+                const foundBtoA = texts.includes(msgTextBtoA);
+                logA('Message A->B in DB: ' + (foundAtoB ? 'YES' : 'NO'), foundAtoB ? 'recv' : 'error');
+                logA('Message B->A in DB: ' + (foundBtoA ? 'YES' : 'NO'), foundBtoA ? 'recv' : 'error');
+                setResult(4, foundAtoB && foundBtoA);
+
+                // ==== TEST 6 — CONVERSATION AUTHORIZATION ====
+                setRunning(6);
+                logA('TEST 6: Logging in as Lisa (3rd user) to test authorization...', 'info');
+                const resC = await apiPost('/auth/login', { email: 'lisa@nivara.app', password: 'password123' });
+                tokenC = resC.data.access_token;
+
+                const unauthRes = await apiGet('/community/chats/' + chatId + '/messages', tokenC);
+                logA('Lisa accessing Sarah<->David chat: HTTP ' + unauthRes.status, unauthRes.status === 403 ? 'recv' : 'error');
+                setResult(6, unauthRes.status === 403);
+
+                // ==== TEST 7 — RECONNECTION ====
+                setRunning(7);
+                logA('TEST 7: Reconnecting WebSocket after disconnect...', 'info');
+                setStatusA('Reconnecting...', 'pending');
+                try {
+                    const reconn = await connectWS(tokenA);
+                    logA('Reconnected! Ack: user_id=' + reconn.ack.user_id, 'recv');
+
+                    // Ping-pong test
+                    reconn.ws.send(JSON.stringify({ type: 'ping' }));
+                    const pong = await waitForMessage(reconn.ws, m => m.type === 'pong', 3000);
+                    logA('Ping sent, Pong received! Heartbeat verified.', 'recv');
+                    reconn.ws.close();
+                    setStatusA('Disconnected (test complete)', 'disconnected');
+                    setResult(7, true);
+                } catch (e) {
+                    logA('Reconnection failed: ' + e.message, 'error');
+                    setResult(7, false);
+                }
+
+                // ==== TEST 8 — BROWSER CONSOLE ERRORS ====
+                setRunning(8);
+                const wsErrors = consoleErrors.filter(e =>
+                    e.includes('WebSocket') || e.includes('401') || e.includes('403') ||
+                    e.includes('CORS') || e.includes('React') || e.includes('Unhandled')
+                );
+                logA('TEST 8: Console errors found: ' + wsErrors.length, wsErrors.length === 0 ? 'recv' : 'error');
+                if (wsErrors.length > 0) wsErrors.forEach(e => logA('  Error: ' + e, 'error'));
+                setResult(8, wsErrors.length === 0);
+
+                // ==== OVERALL ====
+                await sleep(300);
+                const results = [1,2,3,4,5,6,7,8].map(i => document.getElementById('res'+i).textContent);
+                const allPass = results.every(r => r === 'PASS');
+                const overallEl = document.getElementById('overall-status');
+                if (allPass) {
+                    overallEl.textContent = 'ALL 8 REAL-TIME WEBSOCKET TESTS PASSED!';
+                    overallEl.className = 'all-pass';
+                } else {
+                    const failed = results.filter(r => r !== 'PASS').length;
+                    overallEl.textContent = failed + ' TEST(S) FAILED';
+                    overallEl.className = 'some-fail';
+                }
+
+            } catch (err) {
+                logA('FATAL ERROR: ' + err.message, 'error');
+                logB('FATAL ERROR: ' + err.message, 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Run All 8 Tests';
+        }
+    </script>
+</body>
+</html>
