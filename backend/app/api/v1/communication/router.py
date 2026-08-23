@@ -32,8 +32,25 @@ from app.domains.communication.schemas import (
     CommunicationHistoryFilter,
     CommunicationHistoryPage,
 )
+from app.ai.templates import tokens_to_message
+from app.domains.entitlements.service import EntitlementService, Feature
 
 router = APIRouter(prefix="/communication", tags=["AI Communication & AAC Foundation"])
+
+
+def _require_feature(db: Session, current_user: Optional[User], feature: Feature) -> None:
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+    if not EntitlementService(db).has_feature_access(current_user.id, feature.value):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "premium_feature_required", "feature": feature.value},
+        )
+
+
+def _require_multilingual_if_needed(db: Session, current_user: Optional[User], language: Optional[str]) -> None:
+    if (language or "en-US").lower() not in {"en", "en-us", "en-in", "en-gb"}:
+        _require_feature(db, current_user, Feature.AAC_MULTILINGUAL)
 
 # ==============================================================================
 # AAC Categories & Picture Cards Foundation APIs
@@ -187,6 +204,9 @@ def generate_ai_sentence(
     db: Session = Depends(get_db)
 ):
     """Generate grammatically complete natural, child-friendly sentence and suggestions from AAC tokens."""
+    request_text = tokens_to_message(req.tokens, req.sentence)
+    if not EntitlementService.is_emergency_aac(request_text):
+        _require_feature(db, current_user, Feature.AAC_AI_GENERATION)
     service = CommunicationService(db)
     return service.build_sentence(req, current_user=current_user)
 
@@ -200,6 +220,7 @@ def simplify_ai_text(
     db: Session = Depends(get_db)
 ):
     """Simplify complex sentences into concise, visual-friendly bullet points and matching AAC tokens."""
+    _require_feature(db, current_user, Feature.AAC_PERSONALIZATION)
     service = CommunicationService(db)
     return service.simplify_text(req, current_user=current_user)
 
@@ -224,6 +245,7 @@ def synthesize_speech(
     Child authorization enforced when child_id is provided.
     No API keys or provider credentials are ever exposed in the response.
     """
+    _require_multilingual_if_needed(db, current_user, req.language)
     service = CommunicationService(db)
     return service.synthesize_speech(req, current_user=current_user)
 
@@ -239,6 +261,7 @@ def synthesize_aac_speech(
     Synthesize speech directly from a list of AAC tokens or card labels.
     Child authorization enforced when child_id is provided.
     """
+    _require_multilingual_if_needed(db, current_user, req.language)
     service = CommunicationService(db)
     return service.synthesize_aac_speech(req, current_user=current_user)
 
@@ -253,6 +276,7 @@ def synthesize_ai_sentence_speech(
     Synthesize speech for an AI-generated sentence with emotion tone inflection.
     Child authorization enforced when child_id is provided.
     """
+    _require_multilingual_if_needed(db, current_user, req.language)
     service = CommunicationService(db)
     return service.synthesize_ai_sentence_speech(req, current_user=current_user)
 
@@ -334,6 +358,7 @@ def get_favorite_phrases(
     db: Session = Depends(get_db)
 ):
     """Retrieve saved favorite communication phrases for user or child."""
+    _require_feature(db, current_user, Feature.AAC_SAVED_PHRASES)
     service = CommunicationService(db)
     return service.get_favorite_phrases(child_id=child_id, current_user=current_user, category=category)
 
@@ -347,6 +372,7 @@ def save_favorite_phrase(
     db: Session = Depends(get_db)
 ):
     """Save a favorite communication phrase or sentence strip with duplicate prevention."""
+    _require_feature(db, current_user, Feature.AAC_SAVED_PHRASES)
     service = CommunicationService(db)
     return service.save_favorite_phrase(req, current_user=current_user)
 
@@ -360,6 +386,7 @@ def remove_favorite_phrase(
     db: Session = Depends(get_db)
 ):
     """Remove a saved favorite phrase with ownership validation."""
+    _require_feature(db, current_user, Feature.AAC_SAVED_PHRASES)
     service = CommunicationService(db)
     return service.delete_favorite_phrase(phrase_id, current_user=current_user)
 

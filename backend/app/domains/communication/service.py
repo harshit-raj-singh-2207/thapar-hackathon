@@ -351,8 +351,13 @@ class CommunicationService:
             # Seed / return default common phrases if table is empty
             default_items = [
                 ("I need help", "Emergency & Help", "🆘"),
+                ("Please call my caregiver", "Emergency & Help", "📞"),
+                ("I feel unsafe", "Emergency & Help", "🛡️"),
+                ("I feel safe", "Quick Responses", "✅"),
                 ("I am hungry", "Food & Drink", "🍽️"),
                 ("I am thirsty", "Food & Drink", "🥤"),
+                ("I need water", "Food & Drink", "🥤"),
+                ("I need space", "Comfort & Calm", "↔️"),
                 ("I need a break", "Comfort & Calm", "⏸️"),
                 ("I want to play", "Activities", "🧸"),
                 ("I need the toilet", "Daily Needs", "🚻"),

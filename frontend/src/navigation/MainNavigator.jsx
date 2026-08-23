@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import HomeScreen from '../screens/home/HomeScreen';
@@ -21,6 +22,8 @@ import ChildStatusScreen from '../screens/caregiver/ChildStatusScreen';
 import DeviceStatusScreen from '../screens/caregiver/DeviceStatusScreen';
 import SafetyOverviewScreen from '../screens/caregiver/SafetyOverviewScreen';
 import SupportCenterScreen from '../screens/caregiver/SupportCenterScreen';
+import PhoneSupportScreen from '../screens/caregiver/PhoneSupportScreen';
+import SafetyPrivacyCenterScreen from '../screens/caregiver/SafetyPrivacyCenterScreen';
 
 // Direct Communication screens
 import AACScreen from '../screens/communication/AACScreen';
@@ -43,14 +46,48 @@ import SensoryHomeScreen from '../screens/sensory/SensoryHomeScreen';
 
 // Direct Games & Learning Progress screens
 import GamesHomeScreen from '../screens/learning/GamesHomeScreen';
+import SafetyDeviceStatusScreen from '../screens/safety/DeviceStatusScreen';
 
 const Stack = createNativeStackNavigator();
 
+function GlobalPageHeader({ navigation }) {
+  return (
+    <View style={styles.globalHeader}>
+      <TouchableOpacity
+        style={styles.headerAction}
+        onPress={() => navigation.canGoBack() && navigation.goBack()}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <Text style={styles.headerActionText}>‹ Back</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.headerBrand}>NIVARA</Text>
+
+      <TouchableOpacity
+        style={[styles.headerAction, styles.homeAction]}
+        onPress={() => navigation.navigate('Home')}
+        accessibilityRole="button"
+        accessibilityLabel="Go to home page"
+      >
+        <Text style={[styles.headerActionText, styles.homeActionText]}>⌂ Home</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function MainNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Home">
+    <Stack.Navigator
+      initialRouteName="Home"
+      screenOptions={({ navigation, route }) => ({
+        headerShown: route.name !== 'Home' && route.name !== 'DashboardHome',
+        header: () => <GlobalPageHeader navigation={navigation} />,
+      })}
+    >
       {/* 1. Flagship Unified Home Dashboard */}
       <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="DashboardHome" component={HomeScreen} />
 
       {/* 2. Main Hub Portals */}
       <Stack.Screen name="CommunicationTab" component={CommunicationNavigator} />
@@ -88,6 +125,9 @@ export default function MainNavigator() {
       <Stack.Screen name="DeviceStatus" component={DeviceStatusScreen} />
       <Stack.Screen name="SafetyOverview" component={SafetyOverviewScreen} />
       <Stack.Screen name="SupportCenter" component={SupportCenterScreen} />
+      <Stack.Screen name="PhoneSupport" component={PhoneSupportScreen} />
+      <Stack.Screen name="SafetyPrivacyCenter" component={SafetyPrivacyCenterScreen} />
+      <Stack.Screen name="SafetyDeviceStatus" component={SafetyDeviceStatusScreen} />
 
       {/* 6. Sensory Support Routes */}
       <Stack.Screen name="SensoryHome" component={SensoryHomeScreen} />
@@ -99,3 +139,41 @@ export default function MainNavigator() {
     </Stack.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  globalHeader: {
+    minHeight: 58,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerBrand: {
+    color: '#0F172A',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  headerAction: {
+    minWidth: 82,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  headerActionText: {
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  homeAction: {
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+  },
+  homeActionText: {
+    color: '#FFFFFF',
+  },
+});

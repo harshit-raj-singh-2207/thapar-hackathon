@@ -446,3 +446,65 @@ def test_live_state_returns_only_stored_latest_communication_metadata():
     communication.get_recent_history.assert_called_once_with(
         child_id="child-1", limit=1, current_user=user
     )
+
+
+def test_live_state_reuses_latest_sensory_state_and_local_support():
+    now = datetime(2026, 8, 23, 12, 0, tzinfo=timezone.utc)
+    user, emotion, communication, safety, location, routine, caregiver = _dependencies(now)
+    sensory = Mock()
+    sensory.get_latest_state.return_value = SimpleNamespace(
+        sensory_state="too_noisy",
+        intensity=8,
+        suggestions=[
+            "Move to a quieter place if you can.",
+            "Use headphones or ear protection if available.",
+        ],
+        created_at=now - timedelta(seconds=5),
+    )
+
+    result = LiveStateService(
+        Mock(),
+        emotion_service=emotion,
+        communication_service=communication,
+        sensory_service=sensory,
+        safety_service=safety,
+        location_repository=location,
+        user_loader=Mock(return_value=user),
+        routine_loader=Mock(return_value=routine),
+        caregiver_loader=Mock(return_value=caregiver),
+        location_sharing_loader=Mock(return_value=True),
+        now=lambda: now,
+    ).get_user_live_state(user.id)
+
+    assert result.sensory.status == "available"
+    assert result.sensory.current_state == "too_noisy"
+    assert result.sensory.intensity == 8
+    assert "quieter" in result.sensory.recommended_support[0].lower()
+    assert result.sensory.updated_at == now - timedelta(seconds=5)
+    assert result.last_updated == now - timedelta(seconds=5)
+    sensory.get_latest_state.assert_called_once_with(user.id)
+
+
+def test_missing_sensory_state_is_cleanly_unavailable():
+    now = datetime(2026, 8, 23, 12, 0, tzinfo=timezone.utc)
+    user, emotion, communication, safety, location, routine, caregiver = _dependencies(now)
+    sensory = Mock()
+    sensory.get_latest_state.return_value = None
+
+    result = LiveStateService(
+        Mock(),
+        emotion_service=emotion,
+        communication_service=communication,
+        sensory_service=sensory,
+        safety_service=safety,
+        location_repository=location,
+        user_loader=Mock(return_value=user),
+        routine_loader=Mock(return_value=routine),
+        caregiver_loader=Mock(return_value=caregiver),
+        location_sharing_loader=Mock(return_value=True),
+        now=lambda: now,
+    ).get_user_live_state(user.id)
+
+    assert result.sensory.status == "unavailable"
+    assert result.sensory.current_state is None
+    assert result.sensory.recommended_support == []

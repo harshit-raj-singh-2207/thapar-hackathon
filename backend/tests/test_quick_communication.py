@@ -6,6 +6,7 @@ from app.core.database import SessionLocal
 from app.models.user import User
 from app.models.child import Child
 from app.domains.communication.models import SavedPhrase, CommunicationLog
+from app.domains.entitlements.models import UserSubscription
 from app.config.security import create_access_token, get_password_hash
 
 client = TestClient(app)
@@ -38,6 +39,11 @@ def quick_comm_setup(db: Session):
         )
         db.add(user_david)
         db.commit()
+
+    for user in (user_sarah, user_david):
+        if not db.query(UserSubscription).filter(UserSubscription.user_id == user.id).first():
+            db.add(UserSubscription(user_id=user.id, plan="PREMIUM", status="active"))
+    db.commit()
 
     # Child for Sarah
     child = db.query(Child).filter(Child.id == "child-qc-1").first()

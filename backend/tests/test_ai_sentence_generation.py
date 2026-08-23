@@ -6,6 +6,7 @@ from app.models.user import User
 from app.models.child import Child
 from app.core.security import create_access_token, get_password_hash
 from app.domains.communication.models import CommunicationLog
+from app.domains.entitlements.models import UserSubscription
 
 client = TestClient(app)
 
@@ -51,6 +52,11 @@ def ai_comm_setup():
             db.add(cg2)
             db.commit()
             db.refresh(cg2)
+
+        for user in (cg1, cg2):
+            if not db.query(UserSubscription).filter(UserSubscription.user_id == user.id).first():
+                db.add(UserSubscription(user_id=user.id, plan="PREMIUM", status="active"))
+        db.commit()
 
         # Child 1 (belongs to Sarah)
         child1 = db.query(Child).filter(Child.id == "child-ai-1").first()

@@ -45,6 +45,16 @@ class Settings:
     # External API budget (Indian rupees per calendar month)
     MONTHLY_API_BUDGET_INR: float = float(os.getenv("MONTHLY_API_BUDGET_INR", "1500"))
 
+    # Public product pricing. Payment processing is intentionally separate.
+    PREMIUM_MONTHLY_PRICE_INR: float = float(os.getenv("PREMIUM_MONTHLY_PRICE_INR", "299"))
+
+    # Payment provider secrets are server-only. Key ID is safe to return during checkout.
+    PAYMENT_PROVIDER: str = os.getenv("PAYMENT_PROVIDER", "razorpay")
+    PAYMENT_KEY_ID: str = os.getenv("PAYMENT_KEY_ID", "")
+    PAYMENT_KEY_SECRET: str = os.getenv("PAYMENT_KEY_SECRET", "")
+    PAYMENT_WEBHOOK_SECRET: str = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
+    PAYMENT_REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("PAYMENT_REQUEST_TIMEOUT_SECONDS", "10"))
+
     # Optional external AI. Local template/rule fallbacks remain available without a key.
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "groq")
     AI_MODEL: str = os.getenv("AI_MODEL", "llama-3.1-8b-instant")

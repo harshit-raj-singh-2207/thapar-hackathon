@@ -44,6 +44,32 @@ def test_authenticated_user_can_fetch_own_live_state():
     service.get_user_live_state.assert_called_once_with("user-authenticated")
 
 
+def test_live_state_me_cannot_be_overridden_with_another_user_id():
+    """The self endpoint must always derive identity from the bearer token."""
+    expected = LiveStateResponse(
+        user_id="user-authenticated",
+        last_updated=datetime.now(timezone.utc),
+    )
+    service = Mock()
+    service.get_user_live_state.return_value = expected
+
+    app.dependency_overrides[get_current_user] = _override_authenticated_user
+    app.dependency_overrides[get_db] = _override_db
+    try:
+        with patch(
+            "app.domains.live_state.router.LiveStateService", return_value=service
+        ):
+            response = client.get(
+                "/api/v1/live-state/me?user_id=user-unrelated"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["user_id"] == "user-authenticated"
+    service.get_user_live_state.assert_called_once_with("user-authenticated")
+
+
 def test_live_state_rejects_unauthenticated_requests():
     response = client.get("/api/v1/live-state/me")
 

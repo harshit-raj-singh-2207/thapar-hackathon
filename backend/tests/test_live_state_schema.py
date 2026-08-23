@@ -16,6 +16,8 @@ def test_live_state_supports_clean_unavailable_sections():
     assert state.emotion.status == "unavailable"
     assert state.emotion.data is None
     assert state.location.updated_at is None
+    assert state.sensory.status == "unavailable"
+    assert state.sensory.recommended_support == []
     assert state.caregiver_status.data is None
 
 
@@ -52,6 +54,24 @@ def test_live_state_accepts_existing_domain_response_shapes():
     assert state.emotion.data.emotion == "calm"
     assert state.communication.data.sentence == "I need a break."
     assert state.safety.status == "unavailable"
+
+
+def test_live_state_accepts_sensory_state_with_local_support():
+    now = datetime.now(timezone.utc)
+    state = LiveStateResponse(
+        user_id="user-1",
+        sensory={
+            "status": "available",
+            "current_state": "too_noisy",
+            "intensity": 8,
+            "recommended_support": ["Move to a quieter place if you can."],
+            "updated_at": now,
+        },
+        last_updated=now,
+    )
+    assert state.sensory.current_state == "too_noisy"
+    assert state.sensory.intensity == 8
+    assert state.sensory.updated_at == now
 
 
 def test_live_state_rejects_unknown_availability_status():

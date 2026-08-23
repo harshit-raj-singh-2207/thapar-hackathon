@@ -9,6 +9,7 @@ from app.domains.communication.schemas import (
     EmotionCheckinResponse,
 )
 from app.domains.learning.schemas import RoutineResponse, RoutineStepResponse
+from app.domains.sensory.schemas import SensoryState
 from app.schemas.caregiver_dashboard import (
     ChildLocationResponse,
     ChildStatusResponse,
@@ -60,6 +61,12 @@ class CommunicationLiveState(LiveStateSection):
     source: Optional[str] = None
 
 
+class SensoryLiveState(LiveStateSection):
+    current_state: Optional[SensoryState] = None
+    intensity: Optional[int] = Field(default=None, ge=1, le=10)
+    recommended_support: list[str] = Field(default_factory=list)
+
+
 class CaregiverLiveState(LiveStateSection):
     data: Optional[CommunityCaregiverProfileSchema] = None
 
@@ -75,5 +82,6 @@ class LiveStateResponse(BaseModel):
     location: LocationLiveState = Field(default_factory=LocationLiveState)
     routine: RoutineLiveState = Field(default_factory=RoutineLiveState)
     communication: CommunicationLiveState = Field(default_factory=CommunicationLiveState)
+    sensory: SensoryLiveState = Field(default_factory=SensoryLiveState)
     caregiver_status: CaregiverLiveState = Field(default_factory=CaregiverLiveState)
     last_updated: datetime

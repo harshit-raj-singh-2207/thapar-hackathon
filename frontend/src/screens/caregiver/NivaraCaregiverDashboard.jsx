@@ -189,6 +189,7 @@ export default function NivaraCaregiverDashboard({ navigation }) {
   };
 
   const navItems = [
+    { id: 'HOME', label: 'Home', icon: '🏠', route: 'Home' },
     { id: 'DASHBOARD', label: 'Dashboard', icon: '⊞' },
     { id: 'LIVE_LOCATION', label: 'Live Location', icon: '📍' },
     { id: 'HISTORY', label: 'History', icon: '🕒' },
@@ -285,7 +286,10 @@ export default function NivaraCaregiverDashboard({ navigation }) {
                 <TouchableOpacity
                   key={item.id}
                   style={[styles.navItem, isActive && styles.navItemActive]}
-                  onPress={() => setActiveNav(item.id)}
+                  onPress={() => {
+                    if (item.route) navigation.navigate(item.route);
+                    else setActiveNav(item.id);
+                  }}
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.navIcon, isActive && styles.navIconActive]}>
@@ -318,6 +322,7 @@ export default function NivaraCaregiverDashboard({ navigation }) {
                   style={[styles.navItem, isActive && styles.navItemActive]}
                   onPress={() => {
                     if (item.id === 'SETTINGS') setSettingsModalVisible(true);
+                    else if (item.id === 'SUPPORT') navigation.navigate('SupportCenter');
                     else setActiveNav(item.id);
                   }}
                   activeOpacity={0.75}
@@ -380,7 +385,7 @@ export default function NivaraCaregiverDashboard({ navigation }) {
                 <Text style={styles.emergencySosText}>Emergency SOS</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => showToast('Caregiver Help Center')} activeOpacity={0.8}>
+              <TouchableOpacity onPress={() => navigation.navigate('SupportCenter')} activeOpacity={0.8}>
                 <Text style={styles.helpIconText}>❓</Text>
               </TouchableOpacity>
 

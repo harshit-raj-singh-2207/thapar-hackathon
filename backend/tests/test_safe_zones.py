@@ -6,12 +6,28 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.main import app, startup_event
-from app.config.database import Base, engine
+from app.config.database import Base, engine, SessionLocal
+from app.models.user import User
+from app.domains.entitlements.models import UserSubscription
 
 client = TestClient(app)
 
 def get_sarah_auth():
     res = client.post("/api/v1/auth/login", json={"email": "sarah@nivara.app", "password": "password123"})
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "sarah@nivara.app").first()
+        subscription = db.query(UserSubscription).filter(
+            UserSubscription.user_id == user.id
+        ).first()
+        if subscription is None:
+            db.add(UserSubscription(user_id=user.id, plan="PREMIUM", status="active"))
+        else:
+            subscription.plan = "PREMIUM"
+            subscription.status = "active"
+        db.commit()
+    finally:
+        db.close()
     token = res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 

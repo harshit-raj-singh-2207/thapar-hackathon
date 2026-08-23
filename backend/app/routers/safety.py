@@ -12,6 +12,7 @@ from app.models.device import Device
 from app.schemas.safety_event import SafetyOverviewSummary
 from app.services.location_service import location_service
 from app.services.separation_service import separation_service
+from app.domains.caregivers.models import CaregiverPrivacySettings
 
 from app.domains.safety.router import router as gps_location_core_router
 from app.domains.safety.band_router import router as band_router
@@ -90,7 +91,7 @@ def list_safe_zones_alias(
     if user_child_ids:
         zones = db.query(SafeZone).filter(SafeZone.child_id.in_(user_child_ids)).all()
     else:
-        zones = db.query(SafeZone).all()
+        zones = []
     return zones
 
 @router.get("/contacts")
@@ -116,6 +117,8 @@ def list_events_alias(
     query = db.query(SafetyEvent)
     if user_child_ids:
         query = query.filter(SafetyEvent.child_id.in_(user_child_ids))
+    else:
+        return []
     return query.order_by(SafetyEvent.created_at.desc()).limit(limit).all()
 
 @router.get("/location/current")
@@ -125,15 +128,12 @@ def get_current_location_alias(
 ):
     child = current_user.children[0] if current_user.children else None
     if not child:
-        return {
-            "latitude": 37.7750,
-            "longitude": -122.4195,
-            "accuracy": 4.2,
-            "address": "123 Serenity Way, San Francisco, CA",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "speed": 0.0,
-            "heading": 90,
-        }
+        raise HTTPException(status_code=404, detail="No linked user found.")
+    privacy = db.query(CaregiverPrivacySettings).filter(
+        CaregiverPrivacySettings.user_id == current_user.id
+    ).first()
+    if privacy is not None and privacy.show_location is False:
+        raise HTTPException(status_code=403, detail="Location sharing is disabled.")
     latest_loc = location_service.get_latest_location(db, child.id)
     if latest_loc:
         return {
@@ -145,15 +145,7 @@ def get_current_location_alias(
             "speed": latest_loc.speed or 0.0,
             "heading": latest_loc.heading or 0,
         }
-    return {
-        "latitude": 37.7750,
-        "longitude": -122.4195,
-        "accuracy": 4.2,
-        "address": "123 Serenity Way, San Francisco, CA",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "speed": 0.0,
-        "heading": 90,
-    }
+    raise HTTPException(status_code=404, detail="No location data available.")
 
 @router.get("/overview", response_model=List[SafetyOverviewSummary])
 def get_safety_overview(

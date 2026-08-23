@@ -16,6 +16,7 @@ from app.models.child import Child
 from app.models.user import User
 from app.ai.communication_ai import CommunicationAI
 from app.ai.gateway import SmartAIGateway
+from app.ai.templates import find_aac_template
 
 class AACService:
     def __init__(self, db: Session):
@@ -512,13 +513,11 @@ class AACService:
         ai_res = CommunicationAI.generate_sentence_from_tokens(
             resolved_labels, emotion=req.emotion, style=req.style or "natural"
         )
-        gateway_result = SmartAIGateway(self.db).build_aac_sentence(
-            tokens=resolved_labels,
-            user_id=current_user.id if current_user else None,
-            fallback=lambda: ai_res["generated_sentence"],
-            context={"emotion": req.emotion, "style": req.style, "context": req.context},
-        )
-        ai_res["generated_sentence"] = gateway_result.text
+        # Basic AAC stays local/free. Known needs and emergency phrases use the
+        # offline template engine; other tokens use the deterministic builder.
+        template = find_aac_template(" ".join(resolved_labels))
+        if template:
+            ai_res["generated_sentence"] = str(template["text"])
         constructed_sentence = ai_res["generated_sentence"]
 
         # 4. Persistence into CommunicationLog

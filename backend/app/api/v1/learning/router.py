@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.domains.learning.service import LearningService
@@ -15,40 +15,81 @@ from app.domains.learning.schemas import (
     TutorAskRequest,
     TutorAskResponse,
     LearningTopicResponse,
+    AdaptiveRoutineRequest,
+    AdaptiveRoutineResponse,
+    RoutineShareCreate,
+    RoutineShareResponse,
 )
+from app.core.dependencies import get_current_user
+from app.domains.users.models import User
+from app.domains.entitlements.service import EntitlementService, Feature
+from app.domains.learning.adaptive_routine_service import AdaptiveRoutineService
 
 router = APIRouter(prefix="/learning", tags=["Learning & Routines"])
 
+
+def _require_feature(db: Session, user_id: str, feature: Feature) -> None:
+    if not EntitlementService(db).has_feature_access(user_id, feature.value):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "premium_feature_required", "feature": feature.value},
+        )
+
 # Routines
 @router.get("/routines", response_model=List[RoutineResponse])
-def get_routines(db: Session = Depends(get_db)):
+def get_routines(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all daily routines and visual checklists."""
     service = LearningService(db)
-    return service.get_routines()
+    return service.get_routines(user_id=current_user.id)
 
 @router.post("/routines", response_model=RoutineResponse)
-def create_routine(req: RoutineCreate, db: Session = Depends(get_db)):
+def create_routine(req: RoutineCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Create a new customized routine."""
     service = LearningService(db)
-    return service.create_routine(req)
+    return service.create_routine(req, user_id=current_user.id)
 
 @router.post("/routines/steps/{step_id}/toggle")
-def toggle_routine_step(step_id: str, db: Session = Depends(get_db)):
+def toggle_routine_step(step_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Toggle completion status of a routine step."""
     service = LearningService(db)
-    step = service.toggle_routine_step(step_id)
+    step = service.toggle_routine_step(step_id, user_id=current_user.id)
     if not step:
         raise HTTPException(status_code=404, detail="Step not found")
     return {"message": "Step toggled", "is_completed": step.is_completed}
 
 @router.post("/routines/{routine_id}/reset")
-def reset_routine(routine_id: str, db: Session = Depends(get_db)):
+def reset_routine(routine_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Reset all steps in a routine for the new day."""
     service = LearningService(db)
-    routine = service.reset_routine(routine_id)
+    routine = service.reset_routine(routine_id, user_id=current_user.id)
     if not routine:
         raise HTTPException(status_code=404, detail="Routine not found")
     return {"message": "Routine reset successfully"}
+
+
+@router.post("/routines/adaptive-plan", response_model=AdaptiveRoutineResponse)
+def create_adaptive_routine_plan(
+    req: AdaptiveRoutineRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_feature(db, current_user.id, Feature.ROUTINE_ADAPTIVE)
+    if req.days > 1:
+        _require_feature(db, current_user.id, Feature.ROUTINE_MULTI_DAY)
+    return AdaptiveRoutineService(db).create_plan(req, current_user.id)
+
+
+@router.post("/routines/{routine_id}/share", response_model=RoutineShareResponse)
+def share_routine_with_caregiver(
+    routine_id: str,
+    req: RoutineShareCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_feature(db, current_user.id, Feature.ROUTINE_SHARED_EDITING)
+    return LearningService(db).share_routine(
+        routine_id, current_user.id, req.caregiver_user_id, req.can_edit
+    )
 
 # Task Breakdown
 @router.post("/breakdown-task", response_model=TaskBreakdownResponse)
@@ -58,38 +99,40 @@ def breakdown_task(req: TaskBreakdownRequest, db: Session = Depends(get_db)):
     return service.breakdown_task_ai(req)
 
 @router.get("/tasks", response_model=List[TaskResponse])
-def get_tasks(db: Session = Depends(get_db)):
+def get_tasks(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all saved tasks with micro-step progress."""
     service = LearningService(db)
-    return service.get_tasks()
+    return service.get_tasks(user_id=current_user.id)
 
 @router.post("/tasks", response_model=TaskResponse)
-def create_task(req: TaskCreate, db: Session = Depends(get_db)):
+def create_task(req: TaskCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Save a broken down task to child's dashboard."""
     service = LearningService(db)
-    return service.create_task(req)
+    return service.create_task(req, user_id=current_user.id)
 
 @router.post("/tasks/{task_id}/steps/{step_index}")
-def update_task_step(task_id: str, step_index: int, is_completed: bool, db: Session = Depends(get_db)):
+def update_task_step(task_id: str, step_index: int, is_completed: bool, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Update checkoff status of an individual task micro-step."""
     service = LearningService(db)
-    task = service.update_task_step_progress(task_id, step_index, is_completed)
+    task = service.update_task_step_progress(
+        task_id, step_index, is_completed, user_id=current_user.id
+    )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"message": "Task progress updated", "is_completed": task.is_completed}
 
 # Reminders
 @router.get("/reminders", response_model=List[ReminderResponse])
-def get_reminders(db: Session = Depends(get_db)):
+def get_reminders(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get active reminders for hydration, sensory breaks, and routines."""
     service = LearningService(db)
-    return service.get_reminders()
+    return service.get_reminders(user_id=current_user.id)
 
 @router.post("/reminders", response_model=ReminderResponse)
-def create_reminder(req: ReminderCreate, db: Session = Depends(get_db)):
+def create_reminder(req: ReminderCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Create a new schedule reminder."""
     service = LearningService(db)
-    return service.create_reminder(req)
+    return service.create_reminder(req, user_id=current_user.id)
 
 @router.post("/reminders/{reminder_id}/toggle")
 def toggle_reminder(reminder_id: str, db: Session = Depends(get_db)):

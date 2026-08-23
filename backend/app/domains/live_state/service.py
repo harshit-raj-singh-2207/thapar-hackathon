@@ -18,12 +18,14 @@ from app.domains.live_state.schemas import (
     LocationLiveState,
     RoutineLiveState,
     SafetyLiveState,
+    SensoryLiveState,
 )
 from app.domains.safety.caregiver_dashboard_service import CaregiverDashboardService
 from app.domains.safety.repository import LocationRepository
 from app.domains.users.models import User
 from app.schemas.caregiver_dashboard import ChildLocationResponse
 from app.schemas.caregiver_dashboard import RecentActivityItem
+from app.domains.sensory.service import SensoryStateService
 
 
 class LiveStateService:
@@ -35,6 +37,7 @@ class LiveStateService:
         *,
         emotion_service=None,
         communication_service=None,
+        sensory_service=None,
         safety_service=None,
         location_repository=None,
         user_loader: Optional[Callable[[str], Optional[User]]] = None,
@@ -46,6 +49,7 @@ class LiveStateService:
         self.db = db
         self.emotion_service = emotion_service or EmotionService(db)
         self.communication_service = communication_service or CommunicationService(db)
+        self.sensory_service = sensory_service or SensoryStateService(db)
         self.safety_service = safety_service or CaregiverDashboardService(db)
         self.location_repository = location_repository or LocationRepository(db)
         self.user_loader = user_loader or self._load_user
@@ -306,6 +310,29 @@ class LiveStateService:
                 CommunicationLiveState, "Communication state unavailable."
             )
 
+        # Sensory: reuse the latest explicit self-report and local calm strategies.
+        # This read performs no AI or external API request.
+        try:
+            sensory_data = self.sensory_service.get_latest_state(user_id)
+            if sensory_data:
+                sensory_updated = sensory_data.created_at
+                sensory = SensoryLiveState(
+                    status="available",
+                    current_state=sensory_data.sensory_state,
+                    intensity=sensory_data.intensity,
+                    recommended_support=sensory_data.suggestions,
+                    updated_at=sensory_updated,
+                )
+                timestamps.append(sensory_updated)
+            else:
+                sensory = self._unavailable(
+                    SensoryLiveState, "No sensory state available."
+                )
+        except Exception:
+            sensory = self._unavailable(
+                SensoryLiveState, "Sensory state unavailable."
+            )
+
         try:
             caregiver_data = self.caregiver_loader(user_id)
             caregiver_updated = None
@@ -330,6 +357,7 @@ class LiveStateService:
             location=location,
             routine=routine,
             communication=communication,
+            sensory=sensory,
             caregiver_status=caregiver_status,
             last_updated=last_updated,
         )

@@ -1,6 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from app.domains.learning.models import Routine, RoutineStep, Task, Reminder, TutorChatSession, LearningTopic
+from sqlalchemy import or_
+from app.domains.learning.models import Routine, RoutineStep, RoutineShare, Task, Reminder, TutorChatSession, LearningTopic
 
 class LearningRepository:
     def __init__(self, db: Session):
@@ -10,8 +11,16 @@ class LearningRepository:
     def get_routines(self, user_id: Optional[str] = None) -> List[Routine]:
         query = self.db.query(Routine)
         if user_id:
-            query = query.filter((Routine.user_id == user_id) | (Routine.user_id == None))
-        return query.order_by(Routine.created_at.asc()).all()
+            query = query.outerjoin(
+                RoutineShare,
+                (RoutineShare.routine_id == Routine.id)
+                & (RoutineShare.caregiver_user_id == user_id),
+            ).filter(or_(
+                Routine.user_id == user_id,
+                Routine.user_id.is_(None),
+                RoutineShare.id.is_not(None),
+            ))
+        return query.distinct().order_by(Routine.created_at.asc()).all()
 
     def get_routine_by_id(self, routine_id: str) -> Optional[Routine]:
         return self.db.query(Routine).filter(Routine.id == routine_id).first()
@@ -38,6 +47,30 @@ class LearningRepository:
             self.db.commit()
             self.db.refresh(routine)
         return routine
+
+    def get_step_by_id(self, step_id: str) -> Optional[RoutineStep]:
+        return self.db.query(RoutineStep).filter(RoutineStep.id == step_id).first()
+
+    def get_routine_share(self, routine_id: str, caregiver_user_id: str) -> Optional[RoutineShare]:
+        return self.db.query(RoutineShare).filter(
+            RoutineShare.routine_id == routine_id,
+            RoutineShare.caregiver_user_id == caregiver_user_id,
+        ).first()
+
+    def share_routine(self, routine_id: str, caregiver_user_id: str, can_edit: bool) -> RoutineShare:
+        share = self.get_routine_share(routine_id, caregiver_user_id)
+        if share is None:
+            share = RoutineShare(
+                routine_id=routine_id,
+                caregiver_user_id=caregiver_user_id,
+                can_edit=can_edit,
+            )
+            self.db.add(share)
+        else:
+            share.can_edit = can_edit
+        self.db.commit()
+        self.db.refresh(share)
+        return share
 
     # Tasks
     def get_tasks(self, user_id: Optional[str] = None) -> List[Task]:

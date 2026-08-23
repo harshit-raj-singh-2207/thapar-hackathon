@@ -14,8 +14,24 @@ from app.schemas.location import (
 )
 from app.services.location_service import location_service
 from app.services.geofence_service import geofence_service
+from app.domains.caregivers.models import CaregiverPrivacySettings
+from app.domains.entitlements.service import EntitlementService, Feature
 
 router = APIRouter(prefix="/locations", tags=["Safety - Location Tracking"])
+
+
+def _authorize_location(db: Session, child_id: str, current_user: User) -> Child:
+    child = db.query(Child).filter(Child.id == child_id).first()
+    if not child:
+        raise HTTPException(status_code=404, detail="Child not found.")
+    if child.caregiver_id != current_user.id and getattr(current_user, "role", None) != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to access this child's location.")
+    privacy = db.query(CaregiverPrivacySettings).filter(
+        CaregiverPrivacySettings.user_id == child.caregiver_id
+    ).first()
+    if privacy is not None and privacy.show_location is False:
+        raise HTTPException(status_code=403, detail="Location sharing is disabled.")
+    return child
 
 @router.post("/", response_model=LocationResponse, status_code=status.HTTP_201_CREATED)
 def record_child_location(
@@ -26,6 +42,7 @@ def record_child_location(
     """
     Log a new GPS coordinate ping for a child. Automatically checks geofence boundaries.
     """
+    _authorize_location(db, data.child_id, current_user)
     try:
         res = location_service.record_location(db, data, evaluate_geofence=True)
         return res["location"]
@@ -41,9 +58,7 @@ def get_child_current_location(
     """
     Fetch the most up-to-date position, safety perimeter status, and active zone for a child.
     """
-    child = db.query(Child).filter(Child.id == child_id).first()
-    if not child:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Child not found.")
+    child = _authorize_location(db, child_id, current_user)
 
     latest = location_service.get_latest_location(db, child_id)
     if not latest:
@@ -86,6 +101,17 @@ def get_child_location_history(
     """
     Retrieve historical GPS breadcrumbs for breadcrumb visualization and route playback.
     """
+    _authorize_location(db, child_id, current_user)
+    if not EntitlementService(db).has_feature_access(
+        current_user.id, Feature.SAFETY_LOCATION_HISTORY.value
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "premium_feature_required",
+                "feature": Feature.SAFETY_LOCATION_HISTORY.value,
+            },
+        )
     history = location_service.get_location_history(
         db, child_id=child_id, start_time=start_time, end_time=end_time, limit=limit
     )
