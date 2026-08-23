@@ -4,6 +4,7 @@ from app.domains.learning.repository import LearningRepository
 from app.domains.learning.models import Task
 from app.domains.learning.schemas import TaskBreakdownRequest, TaskBreakdownResponse, TaskCreate
 from app.ai.learning_ai import LearningAI
+from fastapi import HTTPException, status
 
 class TaskService:
     def __init__(self, db: Session):
@@ -36,10 +37,15 @@ class TaskService:
         )
         return self.repo.create_task(task)
 
-    def update_task_progress(self, task_id: str, step_index: int, is_completed: bool) -> Optional[Task]:
+    def update_task_progress(self, task_id: str, step_index: int, is_completed: bool, user_id: Optional[str] = None) -> Optional[Task]:
         task = self.repo.get_task_by_id(task_id)
         if not task:
             return None
+        if user_id and task.user_id not in {None, user_id}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this task.",
+            )
         
         steps = list(task.steps_data or [])
         if 0 <= step_index < len(steps):

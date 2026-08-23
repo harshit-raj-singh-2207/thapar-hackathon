@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, JSON
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -33,6 +33,19 @@ class RoutineStep(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     routine_rel = relationship("Routine", back_populates="steps")
+
+
+class RoutineShare(Base):
+    __tablename__ = "routine_shares"
+    __table_args__ = (
+        UniqueConstraint("routine_id", "caregiver_user_id", name="uq_routine_share_caregiver"),
+    )
+
+    id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
+    routine_id = Column(String(64), ForeignKey("routines.id", ondelete="CASCADE"), nullable=False, index=True)
+    caregiver_user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    can_edit = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Task(Base):
     __tablename__ = "tasks"

@@ -359,33 +359,32 @@ class CommunicationService:
     ) -> List[SavedPhrase]:
         if child_id:
             self.aac_service._verify_child_access(child_id, current_user)
-
-        # Ensure all standard default emergency items are present in DB
-        default_items = [
-            ("I need help", "Emergency & Help", "🆘"),
-            ("I don't feel well", "Emergency & Health", "🤒"),
-            ("I am scared", "Emergency & Feelings", "😨"),
-            ("I am hungry", "Food & Drink", "🍽️"),
-            ("I need water", "Food & Drink", "🥤"),
-            ("I want to talk", "Communication", "💬"),
-            ("I need quiet", "Comfort & Calm", "🤫"),
-            ("I want my caregiver", "Caregiver & Family", "🫂"),
-            ("I need a break", "Comfort & Calm", "⏸️"),
-            ("I feel sick", "Emergency & Health", "🤢"),
-            ("Please help me", "Emergency & Help", "🙏"),
-            ("Yes, please", "Quick Responses", "👍"),
-            ("No, thank you", "Quick Responses", "✋"),
-            ("I want to play", "Activities", "🧸"),
-            ("I need the toilet", "Daily Needs", "🚻"),
-            ("I feel uncomfortable", "Feelings", "😣"),
-        ]
-        for text, cat, icon in default_items:
-            existing = self.repo.find_duplicate_phrase(
-                text=text,
-                user_id=None,
-                child_id=None,
-            )
-            if not existing:
+        phrases = self.repo.get_phrases(
+            user_id=current_user.id if current_user else None,
+            child_id=child_id,
+            favorites_only=False,
+            category=category
+        )
+        if not phrases:
+            # Seed / return default common phrases if table is empty
+            default_items = [
+                ("I need help", "Emergency & Help", "🆘"),
+                ("Please call my caregiver", "Emergency & Help", "📞"),
+                ("I feel unsafe", "Emergency & Help", "🛡️"),
+                ("I feel safe", "Quick Responses", "✅"),
+                ("I am hungry", "Food & Drink", "🍽️"),
+                ("I am thirsty", "Food & Drink", "🥤"),
+                ("I need water", "Food & Drink", "🥤"),
+                ("I need space", "Comfort & Calm", "↔️"),
+                ("I need a break", "Comfort & Calm", "⏸️"),
+                ("I want to play", "Activities", "🧸"),
+                ("I need the toilet", "Daily Needs", "🚻"),
+                ("I feel uncomfortable", "Feelings", "😣"),
+                ("Please help me", "Emergency & Help", "🙏"),
+                ("Yes, please", "Quick Responses", "👍"),
+                ("No, thank you", "Quick Responses", "✋"),
+            ]
+            for text, cat, icon in default_items:
                 p = SavedPhrase(
                     text=text,
                     category=cat,

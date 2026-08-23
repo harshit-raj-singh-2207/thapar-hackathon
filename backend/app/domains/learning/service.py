@@ -52,11 +52,16 @@ class LearningService:
     def create_routine(self, req: RoutineCreate, user_id: Optional[str] = None) -> Routine:
         return self.routine_service.create_routine(req, user_id=user_id)
 
-    def toggle_routine_step(self, step_id: str):
-        return self.routine_service.toggle_step(step_id)
+    def toggle_routine_step(self, step_id: str, user_id: Optional[str] = None):
+        return self.routine_service.toggle_step(step_id, user_id=user_id)
 
-    def reset_routine(self, routine_id: str):
-        return self.routine_service.reset_routine(routine_id)
+    def reset_routine(self, routine_id: str, user_id: Optional[str] = None):
+        return self.routine_service.reset_routine(routine_id, user_id=user_id)
+
+    def share_routine(self, routine_id: str, owner_user_id: str, caregiver_user_id: str, can_edit: bool):
+        return self.routine_service.share_routine(
+            routine_id, owner_user_id, caregiver_user_id, can_edit
+        )
 
     # Tasks
     def breakdown_task_ai(self, req: TaskBreakdownRequest) -> TaskBreakdownResponse:
@@ -68,8 +73,10 @@ class LearningService:
     def create_task(self, req: TaskCreate, user_id: Optional[str] = None) -> Task:
         return self.task_service.create_task(req, user_id=user_id)
 
-    def update_task_step_progress(self, task_id: str, step_index: int, is_completed: bool) -> Optional[Task]:
-        return self.task_service.update_task_progress(task_id, step_index, is_completed)
+    def update_task_step_progress(self, task_id: str, step_index: int, is_completed: bool, user_id: Optional[str] = None) -> Optional[Task]:
+        return self.task_service.update_task_progress(
+            task_id, step_index, is_completed, user_id=user_id
+        )
 
     # Reminders
     def get_reminders(self, user_id: Optional[str] = None) -> List[Reminder]:

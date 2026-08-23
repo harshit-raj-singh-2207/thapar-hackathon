@@ -38,6 +38,39 @@ class RoutineResponse(RoutineBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class AdaptiveRoutineRequest(BaseModel):
+    goal: str = Field(min_length=1, max_length=300)
+    days: int = Field(default=1, ge=1, le=14)
+    routine_id: Optional[str] = None
+    change_reason: Optional[str] = Field(default=None, max_length=500)
+    preferences: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AdaptiveRoutineResponse(BaseModel):
+    recommendation: str
+    suggested_steps: List[str]
+    days: int
+    source: str
+    budget_status: str
+    fallback_reason: Optional[str] = None
+
+
+class RoutineShareCreate(BaseModel):
+    caregiver_user_id: str = Field(min_length=1, max_length=64)
+    can_edit: bool = True
+
+
+class RoutineShareResponse(BaseModel):
+    id: str
+    routine_id: str
+    caregiver_user_id: str
+    can_edit: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class TaskBreakdownRequest(BaseModel):
     task_title: str
     custom_context: Optional[str] = None

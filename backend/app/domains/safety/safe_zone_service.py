@@ -16,6 +16,7 @@ from app.domains.safety.safe_zone_repository import SafeZoneRepository
 from app.schemas.safe_zone import SafeZoneCreate, SafeZoneUpdate, SafeZoneStatusCheck
 from app.utils.distance import calculate_haversine_distance, is_point_in_polygon
 from app.services.notification_service import notification_service
+from app.domains.entitlements.service import EntitlementService, Feature
 
 logger = logging.getLogger("safety.safe_zone_service")
 
@@ -46,6 +47,23 @@ class SafeZoneService:
     def create_safe_zone(self, data: SafeZoneCreate, current_user: User) -> SafeZone:
         """Create a new safe zone for an authorized child."""
         child = self._verify_caregiver_authorization_for_child(data.child_id, current_user)
+
+        existing_zone_count = len(self.repo.get_by_child_id(child.id))
+        if (
+            existing_zone_count >= 1
+            and getattr(current_user, "role", None) != "admin"
+            and not EntitlementService(self.db).has_feature_access(
+                current_user.id, Feature.SAFETY_MULTIPLE_SAFE_ZONES.value
+            )
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "premium_feature_required",
+                    "feature": Feature.SAFETY_MULTIPLE_SAFE_ZONES.value,
+                    "free_limit": 1,
+                },
+            )
 
         lat = data.latitude if data.latitude is not None else data.center_latitude
         lon = data.longitude if data.longitude is not None else data.center_longitude
