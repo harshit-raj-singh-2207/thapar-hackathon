@@ -6,6 +6,8 @@ from app.models.safe_zone import SafeZone
 from app.models.emergency import EmergencyAlert
 from app.models.emergency_contact import EmergencyContact
 from app.models.safety_event import SafetyEvent
+from app.models.emergency_mode import EmergencyMode, EmergencySupportPreferences
+from app.domains.games.models import Game, GameSession, GameProgress, GameAchievement
 
 __all__ = [
     "User",
@@ -17,4 +19,11 @@ __all__ = [
     "EmergencyAlert",
     "EmergencyContact",
     "SafetyEvent",
+    "EmergencyMode",
+    "EmergencySupportPreferences",
+    "Game",
+    "GameSession",
+    "GameProgress",
+    "GameAchievement",
 ]
+

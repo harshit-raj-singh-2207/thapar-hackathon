@@ -30,6 +30,7 @@ from app.domains.payments.router import router as payments_router
 
 router = APIRouter()
 
+
 router.include_router(dashboard_router)
 router.include_router(caregiver_dashboard_router)
 router.include_router(api_budget_router)
@@ -54,7 +55,9 @@ router.include_router(support_router)
 router.include_router(sound_router)
 router.include_router(social_router)
 router.include_router(safety_router)
+router.include_router(emergency_mode_router)
 router.include_router(location_ws_router)
+
 router.include_router(ws_router)
 
 

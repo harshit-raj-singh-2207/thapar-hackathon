@@ -27,3 +27,5 @@ class Child(Base):
     safe_zones = relationship("SafeZone", back_populates="child", cascade="all, delete-orphan")
     emergencies = relationship("EmergencyAlert", back_populates="child", cascade="all, delete-orphan")
     safety_events = relationship("SafetyEvent", back_populates="child", cascade="all, delete-orphan")
+    emergency_mode = relationship("EmergencyMode", back_populates="child", uselist=False, cascade="all, delete-orphan")
+

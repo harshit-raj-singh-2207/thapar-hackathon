@@ -30,6 +30,10 @@ from app.domains.communication.schemas import (
     CommunicationLogResponse,
     CommunicationHistoryFilter,
     CommunicationHistoryPage,
+    EmergencyCommunicationModeResponse,
+    CaregiverCommunicationReviewResponse,
+    CaregiverEmotionReviewResponse,
+    EmergencyEmotionSummaryResponse,
 )
 from app.domains.communication.aac_service import AACService
 from app.domains.communication.emotion_service import EmotionService
@@ -332,6 +336,20 @@ class CommunicationService:
             current_user=current_user
         )
 
+    def get_caregiver_emotion_review(
+        self,
+        child_id: str,
+        current_user: Optional[User] = None
+    ) -> CaregiverEmotionReviewResponse:
+        return self.emotion_service.get_caregiver_emotion_review(child_id=child_id, current_user=current_user)
+
+    def get_emergency_emotion_summary(
+        self,
+        child_id: Optional[str] = None,
+        current_user: Optional[User] = None
+    ) -> EmergencyEmotionSummaryResponse:
+        return self.emotion_service.get_emergency_emotion_summary(child_id=child_id, current_user=current_user)
+
     # ---------------- Quick Communication & Favorite Phrases ----------------
     def get_common_phrases(
         self,
@@ -376,13 +394,16 @@ class CommunicationService:
                     use_count=10,
                 )
                 self.repo.create_saved_phrase(p)
-            phrases = self.repo.get_phrases(
-                user_id=current_user.id if current_user else None,
-                child_id=child_id,
-                favorites_only=False,
-                category=category
-            )
+
+        phrases = self.repo.get_phrases(
+            user_id=current_user.id if current_user else None,
+            child_id=child_id,
+            favorites_only=False,
+            category=category
+        )
         return phrases
+
+
 
     def get_favorite_phrases(
         self,
@@ -671,3 +692,115 @@ class CommunicationService:
             is_favorite=False,
         )
         return self.repo.create_log(replayed)
+
+    # ---------------- Emergency Communication Mode & Caregiver Review ----------------
+
+    def get_emergency_communication_mode(
+        self,
+        child_id: Optional[str] = None,
+        current_user: Optional[User] = None
+    ) -> EmergencyCommunicationModeResponse:
+        """
+        Provides unified Emergency Communication Mode bundle for remote child independence.
+        Aggregates common emergency phrases, AAC quick-needs, favorites, top phrases,
+        recent history, calming strategies, and speech synthesis configuration.
+        """
+        child_name = None
+        if child_id:
+            child = self.aac_service._verify_child_access(child_id, current_user)
+            child_name = getattr(child, "name", None) or getattr(child, "full_name", None)
+        elif current_user:
+            if getattr(current_user, "children", None):
+                c = current_user.children[0]
+                child_id = c.id
+                child_name = getattr(c, "name", None) or getattr(c, "full_name", None)
+
+        # 1. Fetch common/emergency phrases
+        phrases = self.get_common_phrases(child_id=child_id, current_user=current_user)
+        phrase_responses = [SavedPhraseResponse.model_validate(p) for p in phrases]
+
+        # 2. Fetch quick-needs AAC cards
+        quick_cards = self.get_cards(child_id=child_id, user=current_user, quick_needs_only=True)
+        if not quick_cards:
+            quick_cards = self.get_cards(child_id=child_id, user=current_user)
+
+        # 3. Favorite phrases
+        favorites = self.get_favorite_phrases(child_id=child_id, current_user=current_user)
+        favorite_responses = [SavedPhraseResponse.model_validate(f) for f in favorites]
+
+        # 4. Frequently used phrases
+        top_phrases = self.repo.get_top_used_phrases(
+            child_id=child_id,
+            user_id=current_user.id if current_user else None,
+            limit=10
+        )
+        top_responses = [SavedPhraseResponse.model_validate(tp) for tp in top_phrases]
+
+        # 5. Recent communication logs
+        recent_logs = self.get_recent_history(child_id=child_id, current_user=current_user, limit=10)
+        log_responses = [CommunicationLogResponse.model_validate(l) for l in recent_logs]
+
+        # 6. Calming strategies
+        calming_strategies = [
+            "Take 3 deep breaths with the visual balloon coach.",
+            "Listen to calming rain or ocean waves in Sensory audio.",
+            "Use the quiet corner symbol strip if sounds are too loud.",
+            "Drink a sip of cool water.",
+            "Ask caregiver for a comforting hug or squeeze toy.",
+        ]
+
+        # 7. Speech configuration
+        speech_config = {
+            "rate": 0.9,
+            "pitch": 1.0,
+            "lang": "en-US",
+            "voice": "friendly_child",
+            "volume": 1.0,
+        }
+
+        return EmergencyCommunicationModeResponse(
+            child_id=child_id,
+            child_name=child_name,
+            status="active",
+            is_emergency_mode=True,
+            emergency_phrases=phrase_responses,
+            quick_needs_cards=quick_cards,
+            favorite_phrases=favorite_responses,
+            frequently_used_phrases=top_responses,
+            recent_history=log_responses,
+            calming_strategies=calming_strategies,
+            speech_config=speech_config,
+        )
+
+    def get_caregiver_communication_review(
+        self,
+        child_id: str,
+        current_user: User
+    ) -> CaregiverCommunicationReviewResponse:
+        """
+        Caregiver remote supervision view for reviewing child's communication activity
+        during isolation/remote emergency.
+        """
+        child = self.aac_service._verify_child_access(child_id, current_user)
+        child_name = getattr(child, "name", None) or getattr(child, "full_name", None) or "Child"
+
+        recent_logs = self.repo.get_recent_logs(child_id=child_id, limit=20)
+        top_phrases = self.repo.get_top_used_phrases(child_id=child_id, limit=10)
+        emotion_logs = self.repo.get_emotion_logs(child_id=child_id, limit=20)
+        favorites = self.get_favorite_phrases(child_id=child_id, current_user=current_user)
+        emergency_logs = self.repo.get_emergency_logs(child_id=child_id, limit=20)
+        total_logs = self.repo.count_logs(child_id=child_id)
+
+        return CaregiverCommunicationReviewResponse(
+            child_id=child.id,
+            child_name=child_name,
+            caregiver_id=current_user.id,
+            recent_communications=[CommunicationLogResponse.model_validate(l) for l in recent_logs],
+            frequently_used_phrases=[SavedPhraseResponse.model_validate(p) for p in top_phrases],
+            emotion_communications=[CommunicationLogResponse.model_validate(l) for l in emotion_logs],
+            saved_favorite_phrases=[SavedPhraseResponse.model_validate(f) for f in favorites],
+            emergency_communications=[CommunicationLogResponse.model_validate(l) for l in emergency_logs],
+            emergency_phrases_count=len(emergency_logs),
+            total_logs_count=total_logs,
+        )
+

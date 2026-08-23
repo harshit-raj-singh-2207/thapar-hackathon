@@ -8,6 +8,7 @@ from sqlalchemy import desc
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.child import Child
+from app.models.device import Device
 from app.models.emergency import EmergencyAlert
 from app.models.safety_event import SafetyEvent
 from app.models.location import Location
@@ -18,6 +19,8 @@ from app.schemas.emergency import (
     EmergencyResolveRequest,
     EmergencyResponse,
     EmergencyDetailResponse,
+    NFCSOSTriggerRequest,
+    NFCSOSTriggerResponse,
 )
 from app.services.notification_service import notification_service
 
@@ -353,3 +356,253 @@ class EmergencyService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Database error occurred while resolving emergency."
             )
+
+    def trigger_nfc_sos(self, data: NFCSOSTriggerRequest, current_user: User) -> NFCSOSTriggerResponse:
+        """
+        NFC Emergency Trigger with Wearable & Device Status Verification:
+        1. Validate authenticated user & child access
+        2. Validate NFC identifier
+        3. Verify wearable existence & child association
+        4. Verify wearable online status & battery health
+        5. Trigger existing SOS engine & dispatch caregiver alert
+        6. Persist NFC_SOS_TRIGGERED / NFC_SOS_REJECTED safety events
+        7. Return structured trigger confirmation
+        """
+        now_utc = datetime.now(timezone.utc)
+        nfc_clean = str(data.nfc_identifier).strip() if data.nfc_identifier else ""
+
+        # 1. Verify child existence
+        child = self.db.query(Child).filter(Child.id == data.child_id).first()
+        if not child:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Child with ID '{data.child_id}' not found."
+            )
+
+        # 2. Verify caregiver authorization
+        if child.caregiver_id != current_user.id and getattr(current_user, "role", None) != "admin":
+            ev_rej = SafetyEvent(
+                child_id=child.id,
+                event_type="NFC_SOS_REJECTED",
+                severity="warning",
+                title="Unauthorized NFC SOS Trigger Attempt",
+                description=f"User '{current_user.id}' attempted unauthorized NFC SOS trigger for child '{child.name}'.",
+                latitude=data.latitude,
+                longitude=data.longitude,
+                metadata_json=json.dumps({"nfc_identifier": nfc_clean, "child_id": child.id, "user_id": current_user.id}),
+                is_acknowledged=False,
+                created_at=now_utc,
+            )
+            self.db.add(ev_rej)
+            self.db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Unauthorized: You do not have permission to manage emergency events for this child."
+            )
+
+        # 3. Validate NFC identifier format
+        if not nfc_clean:
+            ev_rej = SafetyEvent(
+                child_id=child.id,
+                event_type="NFC_SOS_REJECTED",
+                severity="warning",
+                title="Invalid NFC SOS Trigger Identifier",
+                description="NFC identifier was empty during emergency trigger attempt.",
+                latitude=data.latitude,
+                longitude=data.longitude,
+                metadata_json=json.dumps({"child_id": child.id}),
+                is_acknowledged=False,
+                created_at=now_utc,
+            )
+            self.db.add(ev_rej)
+            self.db.commit()
+            return NFCSOSTriggerResponse(
+                triggered=False,
+                status="NFC_INVALID",
+                reason="NFC identifier is required and cannot be empty",
+                child_id=child.id,
+                device_verified=False,
+            )
+
+        # 4. Verify Wearable Existence & Association
+        band = self.db.query(Device).filter(Device.child_id == child.id, Device.is_active == True).first()
+        if not band:
+            ev_rej = SafetyEvent(
+                child_id=child.id,
+                event_type="NFC_SOS_REJECTED",
+                severity="warning",
+                title="Wearable Device Missing During NFC SOS",
+                description="No active wearable device is associated with this child.",
+                latitude=data.latitude,
+                longitude=data.longitude,
+                metadata_json=json.dumps({"nfc_identifier": nfc_clean, "child_id": child.id}),
+                is_acknowledged=False,
+                created_at=now_utc,
+            )
+            self.db.add(ev_rej)
+            self.db.commit()
+            return NFCSOSTriggerResponse(
+                triggered=False,
+                status="DEVICE_NOT_ASSOCIATED",
+                reason="No active wearable device is associated with this child",
+                child_id=child.id,
+                device_verified=False,
+            )
+
+        # Check if NFC belongs to another child's wearable
+        other_device = self.db.query(Device).filter(Device.nfc_tag_id == nfc_clean).first()
+        if other_device and other_device.child_id and other_device.child_id != child.id:
+            ev_rej = SafetyEvent(
+                child_id=child.id,
+                event_type="NFC_SOS_REJECTED",
+                severity="warning",
+                title="NFC Belongs To Another Child",
+                description="NFC identifier belongs to another child's wearable device.",
+                latitude=data.latitude,
+                longitude=data.longitude,
+                metadata_json=json.dumps({"nfc_identifier": nfc_clean, "child_id": child.id, "assigned_child": other_device.child_id}),
+                is_acknowledged=False,
+                created_at=now_utc,
+            )
+            self.db.add(ev_rej)
+            self.db.commit()
+            return NFCSOSTriggerResponse(
+                triggered=False,
+                status="DEVICE_NOT_ASSOCIATED",
+                reason="NFC identifier belongs to another child's wearable",
+                child_id=child.id,
+                device_verified=False,
+            )
+
+        # Check NFC match against child wearable or recognized emergency badge
+        valid_nfc_ids = {band.nfc_tag_id, "NIVARA-EMERGENCY-001", "NIVARA-EMERGENCY-SOS", band.serial_number, band.id}
+        if band.nfc_tag_id and nfc_clean not in valid_nfc_ids:
+            ev_rej = SafetyEvent(
+                child_id=child.id,
+                event_type="NFC_SOS_REJECTED",
+                severity="warning",
+                title="NFC Identifier Mismatch",
+                description=f"NFC identifier '{nfc_clean}' does not match the child's assigned wearable.",
+                latitude=data.latitude,
+                longitude=data.longitude,
+                metadata_json=json.dumps({"nfc_identifier": nfc_clean, "child_id": child.id}),
+                is_acknowledged=False,
+                created_at=now_utc,
+            )
+            self.db.add(ev_rej)
+            self.db.commit()
+            return NFCSOSTriggerResponse(
+                triggered=False,
+                status="NFC_INVALID",
+                reason="NFC identifier does not match child wearable",
+                child_id=child.id,
+                device_verified=False,
+            )
+
+        # 5. Verify Wearable / Device Status (Online & Battery)
+        is_device_online = (
+            band.is_online
+            and (band.connection_status in ["online", "connected"] or getattr(band, "bluetooth_connected", True))
+            and (getattr(band, "battery_level", 100) > 0)
+        )
+
+        if not is_device_online:
+            ev_rej = SafetyEvent(
+                child_id=child.id,
+                event_type="NFC_SOS_REJECTED",
+                severity="warning",
+                title="Wearable Offline During NFC SOS",
+                description="Child wearable device is offline, disconnected, or has a depleted battery.",
+                latitude=data.latitude,
+                longitude=data.longitude,
+                metadata_json=json.dumps({"nfc_identifier": nfc_clean, "child_id": child.id}),
+                is_acknowledged=False,
+                created_at=now_utc,
+            )
+            self.db.add(ev_rej)
+            self.db.commit()
+            return NFCSOSTriggerResponse(
+                triggered=False,
+                status="DEVICE_OFFLINE",
+                reason="Wearable device is offline or disconnected",
+                child_id=child.id,
+                device_verified=False,
+            )
+
+        # 6. Determine GPS Location & Fallback to Last Known Location
+        eval_lat = None
+        eval_lon = None
+        if data.latitude is not None and data.longitude is not None:
+            eval_lat = data.latitude
+            eval_lon = data.longitude
+        else:
+            latest_loc = (
+                self.db.query(Location)
+                .filter(Location.child_id == child.id)
+                .order_by(desc(Location.recorded_at), desc(Location.created_at))
+                .first()
+            )
+            if latest_loc:
+                eval_lat = latest_loc.latitude
+                eval_lon = latest_loc.longitude
+
+        # 7. Invoke existing SOS trigger flow (EmergencyAlert + Caregiver Alert dispatch)
+        sos_req = SOSTriggerRequest(
+            child_id=child.id,
+            latitude=eval_lat,
+            longitude=eval_lon,
+            message=f"Emergency SOS triggered via NFC ({nfc_clean})",
+            description=f"Immediate assistance required. Triggered via NFC scan '{nfc_clean}'." + (f" Location: ({eval_lat}, {eval_lon})" if eval_lat is not None else " [Location Unavailable]"),
+            triggered_by="nfc_emergency"
+        )
+
+        emergency_id = None
+        try:
+            res_sos = self.trigger_sos(data=sos_req, current_user=current_user)
+            emergency_id = res_sos.id
+        except HTTPException as e:
+            if e.status_code == status.HTTP_409_CONFLICT:
+                # Active emergency already in progress, maintain SOS_ACTIVE status
+                active_emg = self.repo.get_active_by_child_id(child.id)
+                if active_emg:
+                    emergency_id = active_emg.id
+            else:
+                raise e
+
+        # 8. Persist explicit NFC_SOS_TRIGGERED safety event
+        nfc_event = SafetyEvent(
+            child_id=child.id,
+            event_type="NFC_SOS_TRIGGERED",
+            severity="critical",
+            title=f"NFC SOS TRIGGERED FOR {child.name.upper()}",
+            description=f"Emergency SOS activated via NFC scan '{nfc_clean}'." + (f" Coordinates: ({eval_lat}, {eval_lon})" if eval_lat is not None else ""),
+            latitude=eval_lat,
+            longitude=eval_lon,
+            metadata_json=json.dumps({
+                "nfc_identifier": nfc_clean,
+                "child_id": child.id,
+                "caregiver_id": current_user.id,
+                "emergency_id": emergency_id,
+                "trigger_source": "NFC",
+                "latitude": eval_lat,
+                "longitude": eval_lon,
+                "location_available": eval_lat is not None and eval_lon is not None,
+                "timestamp": now_utc.isoformat(),
+            }),
+            is_acknowledged=False,
+            created_at=now_utc,
+        )
+        self.db.add(nfc_event)
+        self.db.commit()
+
+        return NFCSOSTriggerResponse(
+            triggered=True,
+            status="SOS_ACTIVE",
+            trigger_source="NFC",
+            child_id=child.id,
+            latitude=eval_lat,
+            longitude=eval_lon,
+            location_available=eval_lat is not None and eval_lon is not None,
+            timestamp=now_utc,
+            device_verified=True,
+        )

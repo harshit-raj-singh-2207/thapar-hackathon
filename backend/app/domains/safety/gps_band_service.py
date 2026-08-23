@@ -19,6 +19,11 @@ from app.schemas.device import (
     BandConnectionResponse,
     BandSyncRequest,
     BandSyncResponse,
+    NFCWearableRegisterRequest,
+    NFCWearableUpdateRequest,
+    NFCVerifyRequest,
+    NFCVerifyResponse,
+    NFCWearableResponse,
 )
 
 logger = logging.getLogger("safety.gps_band_service")
@@ -53,12 +58,16 @@ class GPSBandService:
                 )
 
     def _get_band_or_404(self, band_id: str) -> Device:
-        """Retrieve band by primary key id or serial/device_identifier."""
+        """Retrieve band by primary key id, serial_number, device_identifier, or nfc_tag_id."""
         band = self.db.query(Device).filter(Device.id == band_id).first()
         if not band:
             band = (
                 self.db.query(Device)
-                .filter((Device.serial_number == band_id) | (Device.device_identifier == band_id))
+                .filter(
+                    (Device.serial_number == band_id)
+                    | (Device.device_identifier == band_id)
+                    | (Device.nfc_tag_id == band_id)
+                )
                 .first()
             )
         if not band:
@@ -71,7 +80,7 @@ class GPSBandService:
     def register_band(self, data: BandCreate, current_user: User) -> Device:
         """
         Register a new GPS band and optionally assign to a child.
-        Prevents duplicate serial number/identifier and duplicate child assignment.
+        Prevents duplicate serial number/identifier, duplicate NFC/RFID ID, and duplicate child assignment.
         """
         ident = data.device_identifier or data.serial_number
         if not ident:
@@ -80,7 +89,7 @@ class GPSBandService:
                 detail="Device identifier or serial number is required."
             )
 
-        # Check for existing device with same identifier
+        # Check for existing device with same serial/device identifier
         existing = (
             self.db.query(Device)
             .filter((Device.serial_number == ident) | (Device.device_identifier == ident))
@@ -91,6 +100,16 @@ class GPSBandService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"A band with device identifier '{ident}' is already registered."
             )
+
+        # Check for duplicate NFC/RFID tag ID if supplied
+        nfc_tag = str(data.nfc_tag_id).strip() if data.nfc_tag_id else None
+        if nfc_tag:
+            existing_nfc = self.db.query(Device).filter(Device.nfc_tag_id == nfc_tag).first()
+            if existing_nfc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"A wearable with NFC/RFID ID '{nfc_tag}' is already registered."
+                )
 
         # If child_id provided, verify child ownership & duplicate assignment
         if data.child_id:
@@ -110,20 +129,28 @@ class GPSBandService:
         now_utc = datetime.now(timezone.utc)
         conn_status = data.connection_status or ("online" if data.is_online else "offline")
         is_online = data.is_online if data.is_online is not None else (conn_status in ["online", "connected"])
+        gps_enabled = data.gps_enabled if data.gps_enabled is not None else (data.gps_status not in ["offline", "disabled"])
+        bluetooth_connected = data.bluetooth_connected if data.bluetooth_connected is not None else (conn_status in ["online", "connected"])
+        dev_status = data.status or "active"
 
         band = Device(
             child_id=data.child_id,
-            device_name=data.device_name or "GPS Safety Band",
+            device_name=data.device_name or "Nivara Smart Safety Wearable",
             device_type=data.device_type or "gps_band",
             serial_number=ident,
             device_identifier=ident,
+            nfc_tag_id=nfc_tag,
+            status=dev_status,
             battery_level=data.battery_level if data.battery_level is not None else 100,
-            connection_status=conn_status,
+            gps_enabled=gps_enabled,
             gps_status=data.gps_status or "active",
+            bluetooth_connected=bluetooth_connected,
+            connection_status=conn_status,
             is_active=True,
             is_online=is_online,
             firmware_version=data.firmware_version or "v1.2.0",
             last_seen=now_utc,
+            last_seen_at=now_utc,
             last_ping_at=now_utc,
             created_at=now_utc,
             updated_at=now_utc,
@@ -142,9 +169,30 @@ class GPSBandService:
                 detail="Database error occurred while registering the GPS band."
             )
 
+    def register_nfc_wearable(self, data: NFCWearableRegisterRequest, current_user: User) -> Device:
+        """
+        Register a new NFC/RFID enabled wearable band.
+        Validates NFC ID presence, uniqueness, and child authorization.
+        """
+        ident = data.band_id or data.device_identifier or data.serial_number or f"BAND-{data.nfc_tag_id}"
+        band_create = BandCreate(
+            device_identifier=ident,
+            serial_number=ident,
+            nfc_tag_id=data.nfc_tag_id,
+            device_name=data.device_name or "Nivara NFC Wearable Band",
+            device_type=data.device_type or "nfc_wearable",
+            child_id=data.child_id,
+            battery_level=data.battery_level,
+            connection_status=data.connection_status,
+            gps_status=data.gps_status,
+            is_online=data.connection_status in ["online", "connected"],
+            firmware_version=data.firmware_version,
+        )
+        return self.register_band(data=band_create, current_user=current_user)
+
     def get_band_by_identifier(self, identifier: str, current_user: User) -> Device:
         """
-        Retrieve band by band_id or child_id.
+        Retrieve band by band_id, device_identifier, serial_number, nfc_tag_id, or child_id.
         Intelligently resolves identifier to either a band ID or a child's assigned band.
         """
         # 1. Try finding Device by primary key id
@@ -153,10 +201,14 @@ class GPSBandService:
             self._verify_device_authorization(band, current_user)
             return band
 
-        # 2. Try finding Device by serial_number or device_identifier
+        # 2. Try finding Device by serial_number, device_identifier, or nfc_tag_id
         band = (
             self.db.query(Device)
-            .filter((Device.serial_number == identifier) | (Device.device_identifier == identifier))
+            .filter(
+                (Device.serial_number == identifier)
+                | (Device.device_identifier == identifier)
+                | (Device.nfc_tag_id == identifier)
+            )
             .first()
         )
         if band:
@@ -186,6 +238,23 @@ class GPSBandService:
             detail=f"GPS band or child with ID '{identifier}' not found."
         )
 
+    def get_band_by_nfc(self, nfc_tag_id: str, current_user: User) -> Device:
+        """Retrieve band by NFC/RFID identifier."""
+        if not nfc_tag_id or not str(nfc_tag_id).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="NFC/RFID tag identifier is required."
+            )
+        nfc_clean = str(nfc_tag_id).strip()
+        band = self.db.query(Device).filter(Device.nfc_tag_id == nfc_clean).first()
+        if not band:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Wearable with NFC/RFID ID '{nfc_clean}' not found."
+            )
+        self._verify_device_authorization(band, current_user)
+        return band
+
     def get_child_band(self, child_id: str, current_user: User) -> Device:
         """Retrieve band assigned to a specific child."""
         child = self._verify_caregiver_authorization_for_child(child_id, current_user)
@@ -203,7 +272,7 @@ class GPSBandService:
         return band
 
     def get_band_status(self, band_id: str, current_user: User) -> BandStatusResponse:
-        """Retrieve status, battery level, connection status, and last seen for a band."""
+        """Retrieve status, battery level, connection status, NFC tag, and last seen for a band."""
         band = self.get_band_by_identifier(band_id, current_user)
         conn_status = band.connection_status or ("online" if band.is_online else "offline")
         last_seen_time = band.last_seen or band.last_ping_at or band.created_at
@@ -211,6 +280,7 @@ class GPSBandService:
         return BandStatusResponse(
             band_id=band.id,
             device_identifier=band.device_identifier or band.serial_number,
+            nfc_tag_id=band.nfc_tag_id,
             child_id=band.child_id,
             connection_status=conn_status,
             is_online=band.is_online if band.is_online is not None else (conn_status in ["online", "connected"]),
@@ -222,10 +292,26 @@ class GPSBandService:
 
     def update_band(self, band_id: str, data: BandUpdate, current_user: User) -> Device:
         """
-        Update band configuration, status, or child assignment.
+        Update band configuration, status, NFC tag ID, or child assignment.
         """
         band = self._get_band_or_404(band_id)
         self._verify_device_authorization(band, current_user)
+
+        # Handle NFC tag ID update & uniqueness check
+        if data.nfc_tag_id is not None:
+            nfc_val = str(data.nfc_tag_id).strip() if data.nfc_tag_id else None
+            if nfc_val:
+                existing_nfc = (
+                    self.db.query(Device)
+                    .filter(Device.nfc_tag_id == nfc_val, Device.id != band.id)
+                    .first()
+                )
+                if existing_nfc:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"A wearable with NFC/RFID ID '{nfc_val}' is already registered."
+                    )
+            band.nfc_tag_id = nfc_val
 
         # Handle child re-assignment
         if data.child_id is not None:
@@ -247,27 +333,44 @@ class GPSBandService:
                     )
                 band.child_id = new_child.id
 
+        if data.status is not None:
+            band.status = data.status
         if data.device_name is not None:
             band.device_name = data.device_name
         if data.device_type is not None:
             band.device_type = data.device_type
         if data.battery_level is not None:
             band.battery_level = data.battery_level
+        if data.gps_enabled is not None:
+            band.gps_enabled = data.gps_enabled
+        if data.gps_status is not None:
+            band.gps_status = data.gps_status
+            if data.gps_enabled is None:
+                band.gps_enabled = data.gps_status not in ["offline", "disabled"]
+        if data.bluetooth_connected is not None:
+            band.bluetooth_connected = data.bluetooth_connected
         if data.connection_status is not None:
             band.connection_status = data.connection_status
             band.is_online = data.connection_status in ["online", "connected"]
+            if data.bluetooth_connected is None:
+                band.bluetooth_connected = band.is_online
         if data.is_online is not None:
             band.is_online = data.is_online
             band.connection_status = "online" if data.is_online else "offline"
-        if data.gps_status is not None:
-            band.gps_status = data.gps_status
+            if data.bluetooth_connected is None:
+                band.bluetooth_connected = data.is_online
         if data.is_active is not None:
             band.is_active = data.is_active
+            if not band.is_active:
+                band.status = "inactive"
+            elif band.status == "inactive":
+                band.status = "active"
         if data.firmware_version is not None:
             band.firmware_version = data.firmware_version
 
         now_utc = datetime.now(timezone.utc)
         band.last_seen = now_utc
+        band.last_seen_at = now_utc
         band.last_ping_at = now_utc
         band.updated_at = now_utc
 
@@ -282,6 +385,116 @@ class GPSBandService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Database error occurred while updating the GPS band."
             )
+
+    def update_nfc_tag(self, band_id: str, nfc_tag_id: str, current_user: User) -> Device:
+        """
+        Update the NFC/RFID identifier for an existing wearable band.
+        Validates uniqueness and caregiver authorization.
+        """
+        band = self._get_band_or_404(band_id)
+        self._verify_device_authorization(band, current_user)
+
+        if not nfc_tag_id or not str(nfc_tag_id).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="NFC/RFID tag identifier is required and cannot be empty."
+            )
+        nfc_clean = str(nfc_tag_id).strip()
+
+        existing_nfc = (
+            self.db.query(Device)
+            .filter(Device.nfc_tag_id == nfc_clean, Device.id != band.id)
+            .first()
+        )
+        if existing_nfc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"A wearable with NFC/RFID ID '{nfc_clean}' is already registered."
+            )
+
+        now_utc = datetime.now(timezone.utc)
+        band.nfc_tag_id = nfc_clean
+        band.updated_at = now_utc
+
+        try:
+            self.db.commit()
+            self.db.refresh(band)
+            return band
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Database error updating NFC tag for band {band_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database error occurred while updating the NFC tag."
+            )
+
+    def verify_nfc_tag(
+        self,
+        nfc_tag_id: str,
+        current_user: Optional[User] = None,
+        allow_unregistered_response: bool = False
+    ) -> NFCVerifyResponse:
+        """
+        Verify an NFC/RFID tag identifier and return its registered child and band status.
+        If allow_unregistered_response is True, returns verified=False response instead of 404.
+        """
+        if not nfc_tag_id or not str(nfc_tag_id).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="NFC/RFID tag identifier is required and cannot be empty."
+            )
+        nfc_clean = str(nfc_tag_id).strip()
+
+        band = self.db.query(Device).filter(Device.nfc_tag_id == nfc_clean).first()
+        if not band:
+            if allow_unregistered_response:
+                return NFCVerifyResponse(
+                    verified=False,
+                    is_valid=False,
+                    nfc_tag_id=nfc_clean,
+                    reason="NFC tag not registered",
+                    status="unregistered",
+                    is_active=False,
+                    battery_level=None,
+                    gps_enabled=None,
+                    bluetooth_connected=None,
+                    last_seen_at=None,
+                    verified_at=datetime.now(timezone.utc),
+                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"NFC/RFID identifier '{nfc_clean}' is not registered."
+            )
+
+        if current_user is not None:
+            self._verify_device_authorization(band, current_user)
+
+        child = None
+        caregiver_id = None
+        if band.child_id:
+            child = self.db.query(Child).filter(Child.id == band.child_id).first()
+            if child:
+                caregiver_id = child.caregiver_id
+
+        now_utc = datetime.now(timezone.utc)
+        return NFCVerifyResponse(
+            verified=True,
+            is_valid=True,
+            nfc_tag_id=band.nfc_tag_id,
+            band_id=band.device_identifier or band.serial_number or band.id,
+            device_identifier=band.device_identifier or band.serial_number,
+            device_name=band.device_name,
+            child_id=band.child_id,
+            child_name=child.name if child else None,
+            caregiver_id=caregiver_id,
+            status=band.status or ("active" if band.is_active else "inactive"),
+            is_active=band.is_active,
+            battery_level=band.battery_level,
+            gps_enabled=band.gps_enabled,
+            bluetooth_connected=band.bluetooth_connected,
+            last_seen_at=band.last_seen_at or band.last_seen,
+            verified_at=now_utc,
+        )
 
     def remove_band(self, band_id: str, current_user: User) -> Dict[str, Any]:
         """Remove/delete a band."""
@@ -418,12 +631,19 @@ class GPSBandService:
         now_utc = datetime.now(timezone.utc)
         conn_status = data.connection_status or "connected"
         is_online = data.is_online if data.is_online is not None else (conn_status in ["connected", "online"])
+        gps_enabled = data.gps_enabled if data.gps_enabled is not None else (data.gps_status not in ["offline", "disabled"])
+        bluetooth_connected = data.bluetooth_connected if data.bluetooth_connected is not None else (conn_status in ["connected", "online"])
 
         band.battery_level = data.battery_level
         band.connection_status = conn_status
         band.is_online = is_online
+        band.gps_enabled = gps_enabled
         band.gps_status = data.gps_status or "active"
+        band.bluetooth_connected = bluetooth_connected
+        if data.status:
+            band.status = data.status
         band.last_seen = now_utc
+        band.last_seen_at = now_utc
         band.last_ping_at = now_utc
         band.updated_at = now_utc
 
@@ -437,11 +657,15 @@ class GPSBandService:
                 band_id=band.id,
                 device_identifier=band.device_identifier or band.serial_number,
                 child_id=band.child_id,
+                status=band.status or "active",
                 connection_status=band.connection_status,
                 is_online=band.is_online,
                 battery_level=band.battery_level,
+                gps_enabled=band.gps_enabled,
                 gps_status=band.gps_status,
+                bluetooth_connected=band.bluetooth_connected,
                 last_seen=band.last_seen,
+                last_seen_at=band.last_seen_at or band.last_seen,
                 is_stale=False,
             )
         except SQLAlchemyError as e:

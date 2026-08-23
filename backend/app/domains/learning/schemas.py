@@ -1,5 +1,5 @@
 from typing import List, Optional, Any, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 
 class RoutineStepBase(BaseModel):
@@ -18,8 +18,7 @@ class RoutineStepResponse(RoutineStepBase):
     routine_id: str
     created_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class RoutineBase(BaseModel):
     title: str
@@ -37,8 +36,7 @@ class RoutineResponse(RoutineBase):
     steps: List[RoutineStepResponse] = []
     created_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdaptiveRoutineRequest(BaseModel):
@@ -100,8 +98,7 @@ class TaskResponse(BaseModel):
     steps_data: List[Dict[str, Any]] = []
     created_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReminderCreate(BaseModel):
     title: str
@@ -121,8 +118,7 @@ class ReminderResponse(BaseModel):
     is_active: bool
     created_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TutorAskRequest(BaseModel):
     question: str
@@ -136,6 +132,9 @@ class TutorAskResponse(BaseModel):
     simple_analogy: Optional[str] = None
     follow_up_questions: List[str] = []
     icon: str = "💡"
+    recommended_activity: Optional[Dict[str, Any]] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 class LearningTopicResponse(BaseModel):
     id: str
@@ -149,5 +148,39 @@ class LearningTopicResponse(BaseModel):
     progress_pct: int
     created_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
+class EmergencyLearningPlanResponse(BaseModel):
+    child_id: Optional[str] = None
+    child_name: Optional[str] = None
+    is_emergency_mode: bool = False
+    emergency_status: str = "inactive"  # active, scheduled, expired, inactive
+    learning_enabled: bool = True
+    daily_routines: List[RoutineResponse] = []
+    daily_tasks: List[TaskResponse] = []
+    reminders: List[ReminderResponse] = []
+    learning_topics: List[LearningTopicResponse] = []
+    recommended_activities: List[Dict[str, Any]] = []
+    ai_tutor_hint: Optional[str] = None
+    summary_stats: Dict[str, Any] = {}
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CaregiverLearningReviewResponse(BaseModel):
+    child_id: str
+    child_name: str
+    caregiver_id: str
+    is_emergency_mode: bool = False
+    emergency_status: str = "inactive"
+    completed_tasks: List[TaskResponse] = []
+    in_progress_tasks: List[TaskResponse] = []
+    routines: List[RoutineResponse] = []
+    active_reminders: List[ReminderResponse] = []
+    learning_topics: List[LearningTopicResponse] = []
+    recommended_activities: List[Dict[str, Any]] = []
+    overall_completion_rate: float = 0.0
+    summary_stats: Dict[str, Any] = {}
+
+    model_config = ConfigDict(from_attributes=True)
+
+

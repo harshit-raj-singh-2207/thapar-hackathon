@@ -2,6 +2,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.dependencies.auth import get_current_user, get_optional_user
+from app.models.user import User
 from app.domains.learning.service import LearningService
 from app.domains.learning.schemas import (
     RoutineResponse,
@@ -165,3 +167,81 @@ def update_topic_progress(topic_id: str, progress_pct: int, is_completed: bool =
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
     return {"message": "Topic progress updated", "progress_pct": topic.progress_pct}
+
+# ==============================================================================
+# Emergency Learning Mode & Caregiver Remote Review APIs
+# ==============================================================================
+
+@router.get(
+    "/emergency-plan",
+    response_model=EmergencyLearningPlanResponse,
+    summary="Get Emergency Home Learning Plan (Current User/Default Child)"
+)
+@router.get(
+    "/emergency/plan",
+    response_model=EmergencyLearningPlanResponse,
+    summary="Get Emergency Home Learning Plan (Alias)"
+)
+def get_emergency_learning_plan_current(
+    child_id: Optional[str] = Query(None, description="Optional child ID"),
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve unified home-based emergency learning plan for remote isolation.
+    Combines structured daily routines, visual task breakdowns, hydration/sensory reminders,
+    learning topics, and AI tutor Nivi recommendations.
+    """
+    service = LearningService(db)
+    return service.get_emergency_learning_plan(child_id=child_id, current_user=current_user)
+
+@router.get(
+    "/emergency-plan/{child_id}",
+    response_model=EmergencyLearningPlanResponse,
+    summary="Get Emergency Home Learning Plan by Child ID"
+)
+@router.get(
+    "/emergency/plan/{child_id}",
+    response_model=EmergencyLearningPlanResponse,
+    summary="Get Emergency Home Learning Plan by Child ID (Alias)"
+)
+def get_emergency_learning_plan_by_child(
+    child_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve unified home-based emergency learning plan for a specific child.
+    Validates caregiver authorization when authentication is present.
+    """
+    service = LearningService(db)
+    return service.get_emergency_learning_plan(child_id=child_id, current_user=current_user)
+
+@router.get(
+    "/caregiver-review/{child_id}",
+    response_model=CaregiverLearningReviewResponse,
+    summary="Caregiver Remote Learning Review"
+)
+@router.get(
+    "/caregiver-summary/{child_id}",
+    response_model=CaregiverLearningReviewResponse,
+    summary="Caregiver Remote Learning Summary (Alias)"
+)
+@router.get(
+    "/caregiver/review/{child_id}",
+    response_model=CaregiverLearningReviewResponse,
+    summary="Caregiver Remote Learning Review (Nested Alias)"
+)
+def get_caregiver_learning_review(
+    child_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Caregiver remote supervision dashboard view to review child's learning progress,
+    completed routines/tasks, active reminders, and AI recommended activities.
+    Enforces caregiver ownership.
+    """
+    service = LearningService(db)
+    return service.get_caregiver_learning_review(child_id=child_id, current_user=current_user)
+

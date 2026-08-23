@@ -105,6 +105,8 @@ class SafeZoneResponse(BaseModel):
     address: Optional[str] = None
     alert_on_exit: bool = True
     alert_on_enter: bool = False
+    nfc_tag_id: Optional[str] = None
+    status: Optional[str] = "active"
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -127,6 +129,7 @@ class SafeZoneResponse(BaseModel):
                 data_dict["radius_meters"] = rad
                 data_dict["active"] = act
                 data_dict["is_active"] = act
+                data_dict["status"] = data_dict.get("status") or ("active" if act else "inactive")
                 data_dict["created_at"] = getattr(data, "created_at", None) or datetime.now()
                 data_dict["updated_at"] = getattr(data, "updated_at", None) or data_dict["created_at"]
                 return data_dict
@@ -154,3 +157,96 @@ class SafeZoneStatusCheck(BaseModel):
             data["is_inside_safe_zone"] = inside
             data["is_inside"] = inside
         return data
+
+# ==============================================================================
+# NFC Checkpoint & Smart Verification Schemas
+# ==============================================================================
+
+class CheckpointCreate(BaseModel):
+    name: str = Field(..., example="School Gate", min_length=1, max_length=100)
+    nfc_tag_id: str = Field(..., example="NFC-SCHOOL-001", description="Unique NFC identifier assigned to checkpoint")
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude between -90 and 90")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude between -180 and 180")
+    radius: float = Field(100.0, gt=0.0, description="Safe proximity radius in meters")
+    child_id: Optional[str] = Field(None, example="child-leo-1", description="Optional child ID associated with checkpoint")
+    status: Optional[str] = Field("active", example="active")
+    address: Optional[str] = None
+    is_active: Optional[bool] = True
+
+class CheckpointResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    checkpoint_id: str
+    id: str
+    name: str
+    nfc_tag_id: Optional[str] = None
+    latitude: float
+    longitude: float
+    center_latitude: float
+    center_longitude: float
+    radius: float
+    radius_meters: float
+    status: str = "active"
+    is_active: bool = True
+    child_id: Optional[str] = None
+    address: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_checkpoint_aliases(cls, data: Any) -> Any:
+        if hasattr(data, "center_latitude"):
+            try:
+                data_dict = {c.name: getattr(data, c.name) for c in data.__table__.columns}
+                c_id = data_dict.get("id")
+                lat = data_dict.get("center_latitude", 0.0)
+                lon = data_dict.get("center_longitude", 0.0)
+                rad = data_dict.get("radius_meters", 100.0)
+                act = data_dict.get("is_active", True)
+                stat = data_dict.get("status") or ("active" if act else "inactive")
+
+                data_dict["checkpoint_id"] = c_id
+                data_dict["id"] = c_id
+                data_dict["latitude"] = lat
+                data_dict["center_latitude"] = lat
+                data_dict["longitude"] = lon
+                data_dict["center_longitude"] = lon
+                data_dict["radius"] = rad
+                data_dict["radius_meters"] = rad
+                data_dict["status"] = stat
+                data_dict["is_active"] = act
+                data_dict["created_at"] = getattr(data, "created_at", None) or datetime.now()
+                data_dict["updated_at"] = getattr(data, "updated_at", None) or data_dict["created_at"]
+                return data_dict
+            except Exception:
+                pass
+        return data
+
+class NFCGPSVerifyRequest(BaseModel):
+    child_id: str = Field(..., example="child-leo-1", description="Child identifier")
+    band_id: str = Field(..., example="NIVARA-BAND-001", description="Wearable band ID or serial")
+    nfc_tag_id: str = Field(..., example="NFC-SCHOOL-001", description="NFC checkpoint tag ID")
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="GPS latitude reading")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="GPS longitude reading")
+
+class NFCGPSVerifyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    verified: bool
+    status: str  # SAFE, LOCATION_MISMATCH, DEVICE_OFFLINE, UNKNOWN_NFC, FAILED
+    verification_type: str = "NFC_GPS"
+    checkpoint_id: Optional[str] = None
+    checkpoint_name: Optional[str] = None
+    child_id: Optional[str] = None
+    child_name: Optional[str] = None
+    band_id: Optional[str] = None
+    distance_meters: Optional[float] = None
+    radius_meters: Optional[float] = None
+    device_connected: Optional[bool] = None
+    battery_level: Optional[int] = None
+    gps_enabled: Optional[bool] = None
+    bluetooth_connected: Optional[bool] = None
+    reason: Optional[str] = None
+    safety_event_id: Optional[str] = None
+    timestamp: datetime

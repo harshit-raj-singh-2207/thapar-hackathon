@@ -36,6 +36,7 @@ class TutorService:
             "simple_analogy": ai_res.get("simple_analogy"),
             "follow_up_questions": ai_res.get("follow_up_questions", []),
             "icon": ai_res.get("icon", "💡"),
+            "recommended_activity": ai_res.get("recommended_activity"),
             "timestamp": datetime.utcnow().isoformat(),
         })
 
@@ -46,4 +47,5 @@ class TutorService:
             simple_analogy=ai_res.get("simple_analogy"),
             follow_up_questions=ai_res.get("follow_up_questions", []),
             icon=ai_res.get("icon", "💡"),
+            recommended_activity=ai_res.get("recommended_activity"),
         )
