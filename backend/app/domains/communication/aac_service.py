@@ -15,6 +15,7 @@ from app.domains.communication.schemas import (
 from app.models.child import Child
 from app.models.user import User
 from app.ai.communication_ai import CommunicationAI
+from app.ai.gateway import SmartAIGateway
 
 class AACService:
     def __init__(self, db: Session):
@@ -407,6 +408,12 @@ class AACService:
                 self.repo.increment_card_usage(card.id)
 
         ai_res = CommunicationAI.generate_sentence_from_tokens(tokens, emotion=emotion, style=style)
+        gateway_result = SmartAIGateway(self.db).build_aac_sentence(
+            tokens=tokens,
+            fallback=lambda: ai_res["generated_sentence"],
+            context={"emotion": emotion, "style": style},
+        )
+        ai_res["generated_sentence"] = gateway_result.text
         return {
             "raw_tokens": tokens,
             "generated_sentence": ai_res["generated_sentence"],
@@ -505,6 +512,13 @@ class AACService:
         ai_res = CommunicationAI.generate_sentence_from_tokens(
             resolved_labels, emotion=req.emotion, style=req.style or "natural"
         )
+        gateway_result = SmartAIGateway(self.db).build_aac_sentence(
+            tokens=resolved_labels,
+            user_id=current_user.id if current_user else None,
+            fallback=lambda: ai_res["generated_sentence"],
+            context={"emotion": req.emotion, "style": req.style, "context": req.context},
+        )
+        ai_res["generated_sentence"] = gateway_result.text
         constructed_sentence = ai_res["generated_sentence"]
 
         # 4. Persistence into CommunicationLog

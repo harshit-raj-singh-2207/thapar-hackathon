@@ -16,15 +16,15 @@ export const getApiBaseUrl = () => {
   if (hostUri) {
     const host = hostUri.split(':')[0];
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      return `http://${host}:8000/api/v1`;
+      return `http://${host}:8001/api/v1`;
     }
   }
 
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
+    return 'http://10.0.2.2:8001/api/v1';
   }
 
-  return process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  return process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 };
 
 export const getWsBaseUrl = () => {

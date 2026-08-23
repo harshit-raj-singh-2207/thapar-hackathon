@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.domains.learning.repository import LearningRepository
 from app.domains.learning.schemas import TutorAskRequest, TutorAskResponse
 from app.ai.learning_ai import LearningAI
+from app.ai.gateway import SmartAIGateway
 
 class TutorService:
     def __init__(self, db: Session):
@@ -15,6 +16,13 @@ class TutorService:
         
         # Call AI Tutor reasoning
         ai_res = LearningAI.answer_tutor_question(req.question)
+        gateway_result = SmartAIGateway(self.db).explain_message(
+            text=req.question,
+            user_id=user_id,
+            fallback=lambda: ai_res["reply"],
+            context={"topic": req.topic},
+        )
+        ai_res["reply"] = gateway_result.text
 
         # Log conversation turns
         self.repo.append_tutor_message(session.id, {

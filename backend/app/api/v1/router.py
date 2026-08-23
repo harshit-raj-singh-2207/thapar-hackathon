@@ -29,6 +29,7 @@ router = APIRouter()
 
 router.include_router(dashboard_router)
 router.include_router(caregiver_dashboard_router)
+router.include_router(api_budget_router)
 router.include_router(auth_router)
 router.include_router(caregivers_router)
 router.include_router(communication_router)
