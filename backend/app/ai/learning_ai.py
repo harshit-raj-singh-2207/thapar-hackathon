@@ -35,19 +35,32 @@ class LearningAI:
             {"step_number": 2, "title": "Stack books on shelf", "instruction": "Pick up books from floor and line them up neatly.", "icon": "📚", "duration_sec": 60},
             {"step_number": 3, "title": "Put dirty clothes in hamper", "instruction": "Find socks and shirts on floor and drop in laundry basket.", "icon": "🧺", "duration_sec": 45},
             {"step_number": 4, "title": "Smooth bed blanket", "instruction": "Pull blanket up to pillows for a cozy clean bed!", "icon": "🛏️", "duration_sec": 45},
-        ]
+        ],
+        "clean desk": [
+            {"step_number": 1, "title": "Clear papers into folder", "instruction": "Gather drawings and worksheets neatly.", "icon": "📁", "duration_sec": 30},
+            {"step_number": 2, "title": "Put pencils in cup", "instruction": "Place crayons and pencils into the holder.", "icon": "✏️", "duration_sec": 20},
+            {"step_number": 3, "title": "Wipe desk surface", "instruction": "Gently wipe the tabletop clean.", "icon": "🧽", "duration_sec": 30},
+            {"step_number": 4, "title": "Ready for learning", "instruction": "Place your tablet or book in the middle.", "icon": "✨", "duration_sec": 15},
+        ],
+        "sensory break": [
+            {"step_number": 1, "title": "Take 3 balloon breaths", "instruction": "Breathe in slowly through your nose, then puff out gently like a balloon.", "icon": "🧘", "duration_sec": 30},
+            {"step_number": 2, "title": "Shoulder stretches", "instruction": "Roll your shoulders backwards 5 times gently.", "icon": "🌀", "duration_sec": 30},
+            {"step_number": 3, "title": "Squeeze sensory ball", "instruction": "Give your stress ball or plushie 5 soft squeezes.", "icon": "🎾", "duration_sec": 30},
+            {"step_number": 4, "title": "Drink a sip of water", "instruction": "Take a refreshing sip of water.", "icon": "💧", "duration_sec": 20},
+            {"step_number": 5, "title": "Ready & refreshed", "instruction": "Your brain is recharged and ready! ⭐", "icon": "🌟", "duration_sec": 15},
+        ],
     }
 
     @classmethod
     def breakdown_task(cls, task_title: str) -> List[Dict[str, Any]]:
-        title_lower = task_title.lower().strip()
+        title_lower = (task_title or "").lower().strip()
         for key, steps in cls.DEFAULT_TASK_TEMPLATES.items():
             if key in title_lower or title_lower in key:
                 return steps
 
         # Dynamic AI Generator
         return [
-            {"step_number": 1, "title": f"Prepare for {task_title}", "instruction": f"Get your materials ready and take a deep breath to begin.", "icon": "🏁", "duration_sec": 30},
+            {"step_number": 1, "title": f"Prepare for {task_title or 'Task'}", "instruction": f"Get your materials ready and take a deep breath to begin.", "icon": "🏁", "duration_sec": 30},
             {"step_number": 2, "title": "Do step one carefully", "instruction": "Focus on the first small action. Take your time.", "icon": "1️⃣", "duration_sec": 60},
             {"step_number": 3, "title": "Complete main part", "instruction": "Keep going! You are doing great progress.", "icon": "⭐", "duration_sec": 90},
             {"step_number": 4, "title": "Check your work", "instruction": "Look over what you did and make sure everything is in place.", "icon": "🔍", "duration_sec": 30},
@@ -56,33 +69,56 @@ class LearningAI:
 
     @classmethod
     def answer_tutor_question(cls, question: str, age_level: str = "child") -> Dict[str, Any]:
-        q_lower = question.lower()
+        q_lower = (question or "").lower()
         
         if "rainbow" in q_lower:
             reply = "🌈 Rainbows happen when sunlight shines through raindrops! The raindrop acts like a tiny glass triangle that bends the white light into 7 beautiful colors: Red, Orange, Yellow, Green, Blue, Indigo, and Violet!"
             analogy = "Think of sunlight as a box of crayons, and the raindrop opens the box so all colors can shine!"
             follow_up = ["Why is the sky blue?", "How do clouds make rain?"]
             icon = "🌈"
+            recommended = {"title": "Colors of the Rainbow Science Story", "type": "topic", "icon": "🌈"}
         elif "dinosaur" in q_lower or "t-rex" in q_lower:
             reply = "🦖 Dinosaurs lived millions of years ago! Some like the Brachiosaurus ate tall tree leaves (herbivores), while the T-Rex was a mighty hunter with sharp teeth (carnivore)!"
             analogy = "Some dinosaurs were as small as a chicken, while others were as long as two school buses parked together!"
             follow_up = ["Why did dinosaurs disappear?", "Are birds related to dinosaurs?"]
             icon = "🦕"
+            recommended = {"title": "Dinosaur Exploration Module", "type": "topic", "icon": "🦕"}
         elif "space" in q_lower or "planet" in q_lower or "moon" in q_lower:
             reply = "🚀 Our solar system has 8 planets traveling in big circles around the Sun! Earth is the 3rd rock from the sun, and it's the only one with oceans, trees, and us!"
             analogy = "The sun is like a giant warm campfire in the middle, and the planets are friends sitting in circles around it!"
             follow_up = ["What is inside a black hole?", "Why does the moon change shapes?"]
             icon = "🪐"
+            recommended = {"title": "Journey Through the Solar System", "type": "topic", "icon": "🪐"}
         elif "friend" in q_lower or "share" in q_lower:
             reply = "🤝 Being a kind friend means taking turns, listening when someone speaks, and asking: 'Would you like to play together?' If you need quiet time, it's okay to say: 'I need a solo break right now!'"
             analogy = "Friendship is like passing a ball back and forth gently so both people enjoy the game!"
             follow_up = ["What can I do if someone is upset?", "How do I join a game at recess?"]
             icon = "🤝"
+            recommended = {"title": "Taking Turns on the Playground", "type": "topic", "icon": "🛝"}
+        elif "germ" in q_lower or "virus" in q_lower or "wash" in q_lower or "sick" in q_lower:
+            reply = "🧼 Germs are tiny microscopic visitors that can make people sneeze or cough! Washing our hands with warm soapy water for 20 seconds washes them right away so we stay safe and healthy!"
+            analogy = "Soap bubbles act like slippery slide jackets that wash sneaky germs right into the drain!"
+            follow_up = ["How long should I wash my hands?", "Why do we use soap bubbles?"]
+            icon = "🫧"
+            recommended = {"title": "Wash Hands Step-by-Step", "type": "task", "icon": "🧼"}
+        elif "stay home" in q_lower or "lockdown" in q_lower or "emergency" in q_lower or "outside" in q_lower:
+            reply = "🏡 Staying home helps protect our community, grandparents, and classmates! While we are at home, we can learn exciting things, follow our daily visual routines, and have lots of fun!"
+            analogy = "Staying home is like building a giant superhero shield over our whole neighborhood!"
+            follow_up = ["What is on my daily routine today?", "Can we do a relaxing stretch?"]
+            icon = "🛡️"
+            recommended = {"title": "Morning Sunshine Routine", "type": "routine", "icon": "🌅"}
+        elif "math" in q_lower or "count" in q_lower or "number" in q_lower:
+            reply = "🔢 Math is like solving wonderful treasure puzzles with numbers! Adding numbers together is just inviting friends to join the team!"
+            analogy = "If you have 2 blocks and find 2 more, you have a tall castle of 4 blocks!"
+            follow_up = ["What is 5 + 5?", "Can we count shapes together?"]
+            icon = "🧮"
+            recommended = {"title": "Visual Learning & Puzzle Time", "type": "reminder", "icon": "🧩"}
         else:
             reply = f"✨ That is a wonderful question! Learning about '{question}' helps our brain build new super-strength connections. Let's explore step by step!"
             analogy = "Every time you ask a question, your brain gets another star in its curiosity trophy!"
-            follow_up = ["Tell me more about this!", "Can we try a mini quiz?"]
+            follow_up = ["Tell me more about this!", "Would you like to try a calming break?"]
             icon = "💡"
+            recommended = {"title": "5-Minute Sensory Calming Break", "type": "break", "icon": "🎧"}
 
         return {
             "question": question,
@@ -90,4 +126,5 @@ class LearningAI:
             "simple_analogy": analogy,
             "follow_up_questions": follow_up,
             "icon": icon,
+            "recommended_activity": recommended,
         }

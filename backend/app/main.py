@@ -11,7 +11,11 @@ from app.domains.caregivers.models import Caregiver
 from app.domains.community.models import Group, GroupMember, Post, Comment, Resource, Event, SavedPost
 from app.domains.communication.models import AACCategory, AACCard, SavedPhrase, EmotionRecord, CommunicationLog
 from app.domains.learning.models import Routine, RoutineStep, Task, Reminder, LearningTopic, TutorChatSession
+from app.domains.games.models import Game, GameSession, GameProgress, GameAchievement
+from app.domains.games.repository import GamesRepository
 from app.models.caregiver_nfc import CaregiverNFC
+from app.models.emergency_mode import EmergencyMode, EmergencySupportPreferences
+
 
 app = FastAPI(title="NIVARA Caregiver Community API", version="1.0.0")
 
@@ -630,6 +634,9 @@ def startup_event():
             ]
             db.add_all(topics)
             db.commit()
+
+        # Seed initial cognitive and skill development games
+        GamesRepository(db).ensure_seed_games()
 
     finally:
         db.close()

@@ -1,4 +1,4 @@
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 
@@ -206,6 +206,7 @@ class EmotionCheckinRequest(BaseModel):
     intensity: int = Field(5, ge=1, le=10, description="Intensity level from 1 to 10")
     child_id: Optional[str] = None
     note: Optional[str] = None
+    is_emergency_mode: Optional[bool] = None
 
 class EmotionCheckinResponse(BaseModel):
     id: str
@@ -219,6 +220,11 @@ class EmotionCheckinResponse(BaseModel):
     sensory_tip: Optional[str] = None
     recommended_phrases: List[str] = []
     communication_suggestions: List[str] = []
+    suitable_activity: Optional[Dict[str, Any]] = None
+    intensity_level: Optional[str] = "medium"
+    caregiver_alert_recommended: bool = False
+    immediate_calming_guidance: Optional[str] = None
+    is_emergency_mode: bool = False
     created_at: Optional[datetime] = None
     timestamp: Optional[datetime] = None
     is_fallback: bool = False
@@ -233,9 +239,49 @@ class EmotionSuggestionsResponse(BaseModel):
     sensory_tip: str
     recommended_phrases: List[str] = []
     communication_suggestions: List[str] = []
+    suitable_activity: Optional[Dict[str, Any]] = None
+    intensity_level: Optional[str] = "medium"
+    caregiver_alert_recommended: bool = False
+    immediate_calming_guidance: Optional[str] = None
     is_fallback: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CaregiverEmotionReviewResponse(BaseModel):
+    """Caregiver remote supervisory view of child emotional state and distress history."""
+    child_id: str
+    child_name: str
+    caregiver_id: str
+    is_emergency_mode: bool = False
+    emergency_status: str = "inactive"
+    recent_checkins: List[EmotionCheckinResponse] = []
+    high_intensity_alerts: List[EmotionCheckinResponse] = []
+    emotion_breakdown: Dict[str, int] = {}
+    average_intensity: float = 0.0
+    active_calming_strategies: List[str] = []
+    recommended_activities: List[Dict[str, Any]] = []
+    total_checkins_count: int = 0
+    summary_stats: Dict[str, Any] = {}
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmergencyEmotionSummaryResponse(BaseModel):
+    """Unified 90-Day Emergency Emotion support payload."""
+    child_id: Optional[str] = None
+    child_name: Optional[str] = None
+    is_emergency_mode: bool = False
+    emergency_status: str = "inactive"
+    emotion_support_enabled: bool = True
+    supported_emotions: List[str] = []
+    recent_checkins: List[EmotionCheckinResponse] = []
+    recommended_sensory_strategies: List[str] = []
+    recommended_activities: List[Dict[str, Any]] = []
+    summary_stats: Dict[str, Any] = {}
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 
@@ -333,3 +379,38 @@ class CommunicationHistoryPage(BaseModel):
     has_prev: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------- Emergency Communication Mode & Caregiver Review ----------------
+class EmergencyCommunicationModeResponse(BaseModel):
+    """Unified Emergency Communication package for remote child communication."""
+    child_id: Optional[str] = None
+    child_name: Optional[str] = None
+    status: str = "active"
+    is_emergency_mode: bool = True
+    emergency_phrases: List[SavedPhraseResponse] = []
+    quick_needs_cards: List[AACCardResponse] = []
+    favorite_phrases: List[SavedPhraseResponse] = []
+    frequently_used_phrases: List[SavedPhraseResponse] = []
+    recent_history: List[CommunicationLogResponse] = []
+    calming_strategies: List[str] = []
+    speech_config: Optional[dict] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CaregiverCommunicationReviewResponse(BaseModel):
+    """Caregiver remote supervisory view of child communication activity."""
+    child_id: str
+    child_name: str
+    caregiver_id: str
+    recent_communications: List[CommunicationLogResponse] = []
+    frequently_used_phrases: List[SavedPhraseResponse] = []
+    emotion_communications: List[CommunicationLogResponse] = []
+    saved_favorite_phrases: List[SavedPhraseResponse] = []
+    emergency_communications: List[CommunicationLogResponse] = []
+    emergency_phrases_count: int = 0
+    total_logs_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
