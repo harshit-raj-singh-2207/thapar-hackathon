@@ -230,6 +230,34 @@ class CommunicationRepository:
             query = query.filter((EmotionRecord.user_id == user_id) | (EmotionRecord.user_id == None))
         return query.order_by(EmotionRecord.created_at.desc()).limit(limit).all()
 
+    def get_child_emotions(self, child_id: str, limit: int = 50) -> List[EmotionRecord]:
+        return (
+            self.db.query(EmotionRecord)
+            .filter(EmotionRecord.child_id == child_id)
+            .order_by(EmotionRecord.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def count_emotions(self, child_id: Optional[str] = None, user_id: Optional[str] = None) -> int:
+        query = self.db.query(EmotionRecord)
+        if child_id:
+            query = query.filter(EmotionRecord.child_id == child_id)
+        elif user_id:
+            query = query.filter(EmotionRecord.user_id == user_id)
+        return query.count()
+
+    def get_high_intensity_emotions(
+        self,
+        child_id: Optional[str] = None,
+        threshold: int = 8,
+        limit: int = 20
+    ) -> List[EmotionRecord]:
+        query = self.db.query(EmotionRecord).filter(EmotionRecord.intensity >= threshold)
+        if child_id:
+            query = query.filter(EmotionRecord.child_id == child_id)
+        return query.order_by(EmotionRecord.created_at.desc()).limit(limit).all()
+
 
     # ---------------- Communication Logs (History) ----------------
     def create_log(self, log: CommunicationLog) -> CommunicationLog:
@@ -345,4 +373,71 @@ class CommunicationRepository:
             self.db.commit()
             self.db.refresh(log)
         return log
+
+    def get_top_used_phrases(
+        self,
+        child_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[SavedPhrase]:
+        query = self.db.query(SavedPhrase)
+        if child_id:
+            query = query.filter(
+                (SavedPhrase.child_id == child_id) | 
+                ((SavedPhrase.child_id == None) & (SavedPhrase.user_id == None))
+            )
+        elif user_id:
+            query = query.filter((SavedPhrase.user_id == user_id) | (SavedPhrase.user_id == None))
+        return query.order_by(SavedPhrase.usage_count.desc(), SavedPhrase.use_count.desc()).limit(limit).all()
+
+    def get_emotion_logs(
+        self,
+        child_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[CommunicationLog]:
+        query = self.db.query(CommunicationLog).filter(
+            CommunicationLog.is_deleted == False,
+            or_(
+                CommunicationLog.emotion != None,
+                CommunicationLog.source == "emotion",
+            )
+        )
+        if child_id:
+            query = query.filter(CommunicationLog.child_id == child_id)
+        elif user_id:
+            query = query.filter(CommunicationLog.user_id == user_id)
+        return query.order_by(CommunicationLog.created_at.desc()).limit(limit).all()
+
+    def get_emergency_logs(
+        self,
+        child_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[CommunicationLog]:
+        query = self.db.query(CommunicationLog).filter(
+            CommunicationLog.is_deleted == False,
+            or_(
+                CommunicationLog.source.in_(["emergency", "quick_need", "emergency_communication"]),
+                CommunicationLog.category.in_(["Emergency & Help", "Emergency & Health", "Emergency & Feelings"]),
+            )
+        )
+        if child_id:
+            query = query.filter(CommunicationLog.child_id == child_id)
+        elif user_id:
+            query = query.filter(CommunicationLog.user_id == user_id)
+        return query.order_by(CommunicationLog.created_at.desc()).limit(limit).all()
+
+    def count_logs(
+        self,
+        child_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> int:
+        query = self.db.query(CommunicationLog).filter(CommunicationLog.is_deleted == False)
+        if child_id:
+            query = query.filter(CommunicationLog.child_id == child_id)
+        elif user_id:
+            query = query.filter(CommunicationLog.user_id == user_id)
+        return query.count()
+
 

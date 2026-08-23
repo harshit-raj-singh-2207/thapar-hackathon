@@ -31,6 +31,10 @@ from app.domains.communication.schemas import (
     CommunicationLogResponse,
     CommunicationHistoryFilter,
     CommunicationHistoryPage,
+    EmergencyCommunicationModeResponse,
+    CaregiverCommunicationReviewResponse,
+    CaregiverEmotionReviewResponse,
+    EmergencyEmotionSummaryResponse,
 )
 
 router = APIRouter(prefix="/communication", tags=["AI Communication & AAC Foundation"])
@@ -287,6 +291,19 @@ def get_emotion_history(
     return service.get_emotion_history(child_id=child_id, current_user=current_user, limit=limit)
 
 
+@router.get("/emotions/history/{child_id}", response_model=List[EmotionCheckinResponse], summary="Get Child Emotion Check-in History (Path)")
+@router.get("/emotion-history/{child_id}", response_model=List[EmotionCheckinResponse], summary="Get Child Emotion Check-in History (Path Alias)")
+def get_child_emotion_history(
+    child_id: str,
+    limit: int = Query(20, ge=1, le=100, description="Max records to return"),
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve history of recorded emotion check-ins for a specific child."""
+    service = CommunicationService(db)
+    return service.get_emotion_history(child_id=child_id, current_user=current_user, limit=limit)
+
+
 @router.get("/emotions/suggestions", response_model=EmotionSuggestionsResponse, summary="Get Emotion Suggestions & Calming Tips")
 @router.get("/emotion-suggestions", response_model=EmotionSuggestionsResponse, summary="Get Emotion Suggestions (Alias)")
 def get_emotion_suggestions(
@@ -304,6 +321,60 @@ def get_emotion_suggestions(
         child_id=child_id,
         current_user=current_user
     )
+
+
+@router.get(
+    "/emotions/caregiver-review/{child_id}",
+    response_model=CaregiverEmotionReviewResponse,
+    summary="Caregiver Emotion Review & Distress History"
+)
+@router.get(
+    "/emotion/caregiver-review/{child_id}",
+    response_model=CaregiverEmotionReviewResponse,
+    summary="Caregiver Emotion Review (Alias)"
+)
+@router.get(
+    "/emotions/caregiver-summary/{child_id}",
+    response_model=CaregiverEmotionReviewResponse,
+    summary="Caregiver Emotion Summary (Alias)"
+)
+def get_caregiver_emotion_review(
+    child_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Caregiver remote supervisory review of child emotion check-ins, high-intensity distress alerts,
+    active calming strategies, and 90-day emergency emotional status.
+    """
+    service = CommunicationService(db)
+    return service.get_caregiver_emotion_review(child_id=child_id, current_user=current_user)
+
+
+@router.get(
+    "/emotions/emergency-summary",
+    response_model=EmergencyEmotionSummaryResponse,
+    summary="Unified 90-Day Emergency Emotion Summary"
+)
+@router.get(
+    "/emotions/emergency-summary/{child_id}",
+    response_model=EmergencyEmotionSummaryResponse,
+    summary="Unified 90-Day Emergency Emotion Summary for Child"
+)
+@router.get(
+    "/emotion/emergency-summary",
+    response_model=EmergencyEmotionSummaryResponse,
+    summary="Unified 90-Day Emergency Emotion Summary (Alias)"
+)
+def get_emergency_emotion_summary(
+    child_id: Optional[str] = None,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Get 90-day emergency emotion support package including sensory strategies and active check-ins."""
+    service = CommunicationService(db)
+    return service.get_emergency_emotion_summary(child_id=child_id, current_user=current_user)
+
 
 
 
@@ -490,3 +561,84 @@ def log_communication(
     """Log an AAC or voice communication event to history."""
     service = CommunicationService(db)
     return service.log_communication(req, current_user=current_user)
+
+
+# ==============================================================================
+# Emergency Communication Mode & Caregiver Remote Review APIs
+# ==============================================================================
+
+@router.get(
+    "/emergency-mode",
+    response_model=EmergencyCommunicationModeResponse,
+    summary="Get Emergency Communication Mode (Current User/Default Child)"
+)
+@router.get(
+    "/emergency/mode",
+    response_model=EmergencyCommunicationModeResponse,
+    summary="Get Emergency Communication Mode (Alias)"
+)
+def get_emergency_communication_mode_current(
+    child_id: Optional[str] = Query(None, description="Optional child ID"),
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve unified Emergency Communication Mode bundle for remote child independence.
+    Includes common emergency phrases, AAC quick-needs cards, favorites, top phrases,
+    recent history, calming strategies, and speech synthesis settings.
+    """
+    service = CommunicationService(db)
+    return service.get_emergency_communication_mode(child_id=child_id, current_user=current_user)
+
+
+@router.get(
+    "/emergency-mode/{child_id}",
+    response_model=EmergencyCommunicationModeResponse,
+    summary="Get Emergency Communication Mode by Child ID"
+)
+@router.get(
+    "/emergency/mode/{child_id}",
+    response_model=EmergencyCommunicationModeResponse,
+    summary="Get Emergency Communication Mode by Child ID (Alias)"
+)
+def get_emergency_communication_mode_by_child(
+    child_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve unified Emergency Communication Mode bundle for a specific child.
+    Validates caregiver authorization when authentication is present.
+    """
+    service = CommunicationService(db)
+    return service.get_emergency_communication_mode(child_id=child_id, current_user=current_user)
+
+
+@router.get(
+    "/caregiver-review/{child_id}",
+    response_model=CaregiverCommunicationReviewResponse,
+    summary="Caregiver Remote Communication Review"
+)
+@router.get(
+    "/caregiver-summary/{child_id}",
+    response_model=CaregiverCommunicationReviewResponse,
+    summary="Caregiver Remote Communication Summary (Alias)"
+)
+@router.get(
+    "/caregiver/review/{child_id}",
+    response_model=CaregiverCommunicationReviewResponse,
+    summary="Caregiver Remote Communication Review (Nested Alias)"
+)
+def get_caregiver_communication_review(
+    child_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Caregiver remote supervision dashboard view to review recent communications,
+    frequently used phrases, emotion check-ins, and saved favorite phrases during 90-day isolation.
+    Enforces caregiver ownership.
+    """
+    service = CommunicationService(db)
+    return service.get_caregiver_communication_review(child_id=child_id, current_user=current_user)
+

@@ -20,10 +20,12 @@ from app.routers.safety import router as safety_router
 from app.websocket.location_socket import router as location_ws_router
 from app.api.v1.communication.router import router as communication_router
 from app.api.v1.learning.router import router as learning_router
+from app.api.v1.games.router import router as games_router
 from app.domains.safety.caregiver_dashboard_router import router as caregiver_dashboard_router
-from app.domains.api_budget.router import router as api_budget_router
+from app.domains.safety.emergency_mode_router import router as emergency_mode_router
 
 router = APIRouter()
+
 
 router.include_router(dashboard_router)
 router.include_router(caregiver_dashboard_router)
@@ -32,6 +34,7 @@ router.include_router(auth_router)
 router.include_router(caregivers_router)
 router.include_router(communication_router)
 router.include_router(learning_router)
+router.include_router(games_router)
 router.include_router(media_router)
 router.include_router(chat_router)
 router.include_router(group_router)
@@ -44,7 +47,9 @@ router.include_router(support_router)
 router.include_router(sound_router)
 router.include_router(social_router)
 router.include_router(safety_router)
+router.include_router(emergency_mode_router)
 router.include_router(location_ws_router)
+
 router.include_router(ws_router)
 
 

@@ -9,19 +9,40 @@ class CommunicationAI:
 
     DEFAULT_EXPANSIONS = {
         ("I", "WANT", "WATER"): "I want a glass of water, please.",
+        ("I", "NEED", "WATER"): "I need water, please.",
         ("I", "WANT", "FOOD"): "I am hungry and would like some food, please.",
+        ("I", "AM", "HUNGRY"): "I am hungry and need food, please.",
+        ("I", "HUNGRY"): "I am hungry.",
         ("I", "WANT", "TOILET"): "I need to use the restroom, please.",
+        ("I", "NEED", "TOILET"): "I need to use the restroom, please.",
         ("I", "NEED", "HELP"): "I need help right now, please.",
+        ("I", "HELP"): "Please help me.",
+        ("HELP",): "Please help me.",
         ("I", "FEEL", "TIRED"): "I am feeling tired and need to rest.",
         ("I", "WANT", "PLAY"): "I would like to play now.",
         ("NO", "WANT"): "I do not want this right now, thank you.",
         ("TOO", "LOUD"): "It is too loud here. I need a quiet break.",
+        ("I", "WANT", "QUIET"): "I need a quiet place.",
+        ("I", "NEED", "QUIET"): "I need a quiet place.",
         ("I", "FEEL", "SAD"): "I am feeling sad and would like some comfort.",
         ("I", "FEEL", "HAPPY"): "I am feeling happy and good!",
         ("I", "FEEL", "ANXIOUS"): "I am feeling anxious. Can you stay close?",
         ("I", "FEEL", "ANGRY"): "I feel angry and need space to calm down.",
         ("I", "NEED", "BREAK"): "I need a quiet break, please.",
+        ("I", "WANT", "BREAK"): "I need a break, please.",
+        ("I", "FEEL", "SICK"): "I feel sick.",
+        ("I", "SICK"): "I feel sick.",
+        ("I", "DONT", "FEEL", "WELL"): "I do not feel well.",
+        ("I", "NOT", "FEEL", "WELL"): "I do not feel well.",
+        ("I", "AM", "SCARED"): "I am scared.",
+        ("I", "FEEL", "SCARED"): "I am scared.",
+        ("I", "WANT", "TALK"): "I want to talk.",
+        ("I", "WANT", "TO", "TALK"): "I want to talk.",
+        ("I", "WANT", "CAREGIVER"): "I want my caregiver.",
+        ("I", "WANT", "MY", "CAREGIVER"): "I want my caregiver.",
+        ("I", "NEED", "CAREGIVER"): "I want my caregiver.",
     }
+
 
     @classmethod
     def generate_sentence_from_tokens(

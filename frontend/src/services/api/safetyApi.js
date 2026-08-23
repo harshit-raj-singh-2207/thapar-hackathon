@@ -301,6 +301,41 @@ export const safetyApi = {
     }
   },
 
+  triggerNfcSos: async (payload) => {
+    return await apiClient.post('/safety/emergency/nfc-trigger', {
+      child_id: payload.child_id || 'child-leo-1',
+      nfc_identifier: payload.nfc_identifier,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+    });
+  },
+
+  verifyNfcGps: async (payload) => {
+    return await apiClient.post('/safety/verification/nfc-gps', {
+      child_id: payload.child_id || 'child-leo-1',
+      nfc_identifier: payload.nfc_identifier,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+    });
+  },
+
+  verifyCaregiverPickup: async (payload) => {
+    return await apiClient.post('/safety/pickup/verify', {
+      child_id: payload.child_id || 'child-leo-1',
+      nfc_identifier: payload.nfc_identifier,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+    });
+  },
+
+  registerCaregiverNfc: async (payload) => {
+    return await apiClient.post('/safety/caregiver/nfc/register', {
+      child_id: payload.child_id || 'child-leo-1',
+      nfc_identifier: payload.nfc_identifier,
+      status: payload.status || 'active',
+    });
+  },
+
   getSafetyOverview: async (childId = 'child-leo-1') => {
     return await apiClient.get(`/caregiver/${childId}/safety-overview`);
   },

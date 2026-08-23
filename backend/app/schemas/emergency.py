@@ -123,3 +123,25 @@ class EmergencyDetailResponse(BaseModel):
             except Exception:
                 pass
         return data
+
+# ==============================================================================
+# NFC SOS Trigger Schemas
+# ==============================================================================
+
+class NFCSOSTriggerRequest(BaseModel):
+    child_id: str = Field(..., example="child-leo-1", description="Target child ID")
+    nfc_identifier: str = Field(..., example="NIVARA-EMERGENCY-001", min_length=1, description="Physical NFC identifier used to trigger SOS")
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0, description="GPS latitude (-90 to 90)")
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0, description="GPS longitude (-180 to 180)")
+
+class NFCSOSTriggerResponse(BaseModel):
+    triggered: bool
+    status: str  # SOS_ACTIVE, NFC_INVALID, DEVICE_NOT_ASSOCIATED, DEVICE_OFFLINE, UNAUTHORIZED
+    trigger_source: str = "NFC"
+    child_id: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_available: Optional[bool] = None
+    timestamp: Optional[datetime] = None
+    reason: Optional[str] = None
+    device_verified: Optional[bool] = None

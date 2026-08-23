@@ -19,6 +19,8 @@ class DeviceService:
             device_name=data.device_name,
             device_type=data.device_type,
             serial_number=data.serial_number,
+            device_identifier=data.device_identifier or data.serial_number,
+            nfc_tag_id=data.nfc_tag_id,
             battery_level=data.battery_level or 100,
             firmware_version=data.firmware_version or "v1.2.0",
             is_active=True,
@@ -41,6 +43,8 @@ class DeviceService:
             device.device_name = data.device_name
         if data.device_type is not None:
             device.device_type = data.device_type
+        if data.nfc_tag_id is not None:
+            device.nfc_tag_id = data.nfc_tag_id
         if data.is_active is not None:
             device.is_active = data.is_active
         if data.firmware_version is not None:

@@ -58,11 +58,33 @@ class LearningRepository:
     def update_task_progress(self, task_id: str, steps_data: list, is_completed: bool) -> Optional[Task]:
         task = self.get_task_by_id(task_id)
         if task:
-            task.steps_data = steps_data
+            from sqlalchemy.orm.attributes import flag_modified
+            task.steps_data = list(steps_data)
+            flag_modified(task, "steps_data")
             task.is_completed = is_completed
             self.db.commit()
             self.db.refresh(task)
         return task
+
+    def get_completed_tasks(self, user_id: Optional[str] = None) -> List[Task]:
+        query = self.db.query(Task).filter(Task.is_completed == True)
+        if user_id:
+            query = query.filter((Task.user_id == user_id) | (Task.user_id == None))
+        return query.order_by(Task.created_at.desc()).all()
+
+    def get_in_progress_tasks(self, user_id: Optional[str] = None) -> List[Task]:
+        query = self.db.query(Task).filter(Task.is_completed == False)
+        if user_id:
+            query = query.filter((Task.user_id == user_id) | (Task.user_id == None))
+        return query.order_by(Task.created_at.desc()).all()
+
+    def count_tasks(self, user_id: Optional[str] = None, is_completed: Optional[bool] = None) -> int:
+        query = self.db.query(Task)
+        if user_id:
+            query = query.filter((Task.user_id == user_id) | (Task.user_id == None))
+        if is_completed is not None:
+            query = query.filter(Task.is_completed == is_completed)
+        return query.count()
 
     # Reminders
     def get_reminders(self, user_id: Optional[str] = None) -> List[Reminder]:
